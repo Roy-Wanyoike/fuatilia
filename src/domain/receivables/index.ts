@@ -7,3 +7,6 @@ export * from './aging';
 export * from './events';
 export * from './invoice';
 export * from './receivable';
+export * from './late-fee';
+export * from './payment-plan';
+export * from './plan-events';
