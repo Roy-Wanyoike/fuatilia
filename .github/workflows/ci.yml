@@ -16,7 +16,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
+      - name: Build, typecheck, test (with self-reporting summary)
+        id: pipe
+        shell: bash
+        run: |
+          set +e
+          S="$GITHUB_STEP_SUMMARY"
+          {
+            echo "## CI — node $(node -v), npm $(npm -v), $(uname -m)"
+            echo "### npm ci (tail 20)"
+            npm ci --no-audit --no-fund 2>&1 | tail -n 20
+            echo "### typecheck (tail 40)"
+            npm run typecheck 2>&1 | tail -n 40
+            echo "### test (tail 80)"
+            npm test 2>&1 | tail -n 80
+          } >> "$S" 2>&1
+          npm run typecheck >/dev/null 2>&1; TC=$?
+          npm test >/dev/null 2>&1; TE=$?
+          {
+            echo "## GATE"
+            echo "typecheck=$TC test=$TE"
+          } >> "$S" 2>&1
+          echo "FINAL typecheck=$TC test=$TE"
+          exit $(( TC + TE ))
