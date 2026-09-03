@@ -14,5 +14,7 @@ finding from the domain model review. Start here if you are new:
 | [07 — Invariants](07-invariants.md) | R1–R10, the testable rules the code must guarantee |
 | [08 — Build plan](08-build-plan.md) | Three phases, wave order, definition of done |
 | [BACKLOG](BACKLOG.md) | Dispatchable feature list with live status |
+| [SPEC](SPEC.md) | Master build-requirements document (features, workflows, testing, API shape; stack sections superseded by the TypeScript decision) |
+| [design/diagrams](design/diagrams/README.md) | Rendered review figures: context map, money flow, 5 ER clusters, 7 state machines |
 
 Working agreements for engineers and agents are in the root [README](../README.md#how-we-ship).

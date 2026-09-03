@@ -13,14 +13,18 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F5 | Allocation engine — strategy chain FIFO/explicit/pro-rata on Money.allocate (H3, R1, R2) | 2 | #5 | **done** (PR #15) | Cross-module R1/R2 suite; reversal flow |
 | F6 | Event catalog as typed code + outbox contract (envelope, versioning) | 2 | #6 | **done** (PR #16) | All 27 events typed; replay deterministic |
 | F7 | Late fee accrual + PaymentPlan schedule engine (H4, H5) | 2 | #7 | **done** (PR #17) | Accrual caps tested; installment generator |
-| F8 | Collections cases + exclusivity invariant (H6, R8) | 2 | #8 | pending | Second open case rejected; dunning consent hook |
-| F9 | Multi-currency + FX realized gain/loss postings (H2, R10) | 2 | #9 | pending | Cross-currency settlement blocked without FX posting |
+| F8 | Collections cases + actions + exclusivity invariant (H6, R8) | 3 | #8 | pending | Second open case rejected; dunning consent hook; derived case status |
+| F9 | Multi-currency + FX realized gain/loss postings (H2, R10) | 3 | #9 | pending | Cross-currency settlement blocked without FX posting |
 | F10 | Consent registry (DPA 2019) + WhatsApp opt-in + eTIMS numbering hooks (K2–K4) | 2 | #10 | **done** (PR #14) | No dunning without grant; number format reserved |
-| F11 | Sub-ledger posting implementation + GL reconciliation job (K5, R4) | 3 | — | pending | Posting matrix enforced; daily reconciliation job |
-| F12 | Promise-to-pay tracking + dunning orchestration | 3 | — | pending | Promise lifecycle; consent-checked sends |
-| F13 | Collections priority scoring + feedback loop (H7) | 4 | — | pending | Read-only over events; outcome feedback recorded |
-| F14 | Segment strategies + reporting projections | 4 | — | pending | Projections only; no fund-truth writes |
-| F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | — | pending | Fixture replay is idempotent end-to-end |
+| F11 | Sub-ledger posting implementation + GL reconciliation job (K5, R4) | 3 | #18 | pending | Posting matrix enforced; daily reconciliation job; reversals append-only |
+| F12 | Promise-to-pay tracking + dunning orchestration (K2) | 3 | #19 | pending | Promise lifecycle; consent-checked sends; escalation ladder |
+| F16 | Disputes lifecycle — pause collections while disputed (SPEC §29) | 3 | #20 | pending | Disputed receivable pauses automated dunning; resolution resumes |
+| F17 | Payment links — single/partial-use links with lifecycle (SPEC §28) | 3 | #21 | pending | Token redemption bounds enforced; single-use rejected twice |
+| F18 | Communications domain — conversations, messages, delivery attempts, templates (SPEC §26) | 3 | #22 | pending | Consent-before-send; versioned templates; retry → dead-letter |
+| F13 | Collections priority scoring + recommendation feedback loop (H7) | 4 | #23 | pending | Read-only over events; outcome feedback recorded; explainable |
+| F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | pending | Projections only; no fund-truth writes; predictions labeled |
+| F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | pending | Fixture replay is idempotent end-to-end |
+| F19 | Customer behavior profiles + anomaly detection (SPEC §4/§24) | 4 | #26 | pending | Metrics fixture-tested; explainable anomaly events |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -33,4 +37,27 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 
 **Wave-2 dispatch — COMPLETE (merged 2026-09-02):** PR #15 allocation (#5), PR #16 events (#6), PR #17 late fees+plans (#7), PR #14 consent/eTIMS (#10). Combined main: 607/607 tests green.
 
-**Next dispatch (wave 3):** #8 collections cases (#8, new collections/ dir), #9 FX postings (#9, shared+allocation), then #11–#15 (posting matrix, promise-to-pay, intelligence, projections, Daraja conformance).
+## Wave-3 dispatch — collections ops (2026-09-03)
+
+Audited against docs/SPEC.md (master build requirements) and the design review: the remaining
+collections-ops features are F8 + F9 (carried over from wave 2) and F11, F12, F16, F17, F18.
+All seven ship in parallel — each owns one fresh module lane, no cross-lane imports:
+
+- `feat/collections-cases` → #8 (F8) — new lane `src/domain/collections/`
+- `feat/fx-postings` → #9 (F9) — extends `src/domain/shared/` FX kernel + allocation/receivable hooks
+- `feat/ledger-postings` → #18 (F11) — new lane `src/domain/ledger/`
+- `feat/promises-dunning` → #19 (F12) — new lane `src/domain/promises/`
+- `feat/disputes` → #20 (F16) — new lane `src/domain/disputes/`
+- `feat/payment-links` → #21 (F17) — new lane `src/domain/paymentlinks/`
+- `feat/communications` → #22 (F18) — new lane `src/domain/communications/`
+
+## Wave-4 dispatch — intelligence (queued after wave-3 merge)
+
+- `feat/collections-intelligence` → #23 (F13) — new lane `src/domain/intelligence/`
+- `feat/reporting-projections` → #24 (F14) — new lane `src/domain/projections/`
+- `feat/daraja-conformance` → #25 (F15) — new lane `src/adapters/daraja/`
+- `feat/behavior-profiles` → #26 (F19) — new lane `src/domain/behavior/`
+
+Deferred (deliberately not scheduled — see SPEC §2/§33): cross-border payments, embedded
+finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC backend (§34/35 —
+domain core stays pure; API/auth layer lands after the domain is complete).
