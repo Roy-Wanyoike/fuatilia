@@ -13,14 +13,14 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F5 | Allocation engine — strategy chain FIFO/explicit/pro-rata on Money.allocate (H3, R1, R2) | 2 | #5 | **done** (PR #15) | Cross-module R1/R2 suite; reversal flow |
 | F6 | Event catalog as typed code + outbox contract (envelope, versioning) | 2 | #6 | **done** (PR #16) | All 27 events typed; replay deterministic |
 | F7 | Late fee accrual + PaymentPlan schedule engine (H4, H5) | 2 | #7 | **done** (PR #17) | Accrual caps tested; installment generator |
-| F8 | Collections cases + actions + exclusivity invariant (H6, R8) | 3 | #8 | pending | Second open case rejected; dunning consent hook; derived case status |
-| F9 | Multi-currency + FX realized gain/loss postings (H2, R10) | 3 | #9 | pending | Cross-currency settlement blocked without FX posting |
+| F8 | Collections cases + actions + exclusivity invariant (H6, R8) | 3 | #8 | in-progress (re-dispatch) | Second open case rejected; dunning consent hook; derived case status |
+| F9 | Multi-currency + FX realized gain/loss postings (H2, R10) | 3 | #9 | **done** (PR #28) | Cross-currency settlement blocked without FX posting |
 | F10 | Consent registry (DPA 2019) + WhatsApp opt-in + eTIMS numbering hooks (K2–K4) | 2 | #10 | **done** (PR #14) | No dunning without grant; number format reserved |
-| F11 | Sub-ledger posting implementation + GL reconciliation job (K5, R4) | 3 | #18 | pending | Posting matrix enforced; daily reconciliation job; reversals append-only |
-| F12 | Promise-to-pay tracking + dunning orchestration (K2) | 3 | #19 | pending | Promise lifecycle; consent-checked sends; escalation ladder |
-| F16 | Disputes lifecycle — pause collections while disputed (SPEC §29) | 3 | #20 | pending | Disputed receivable pauses automated dunning; resolution resumes |
-| F17 | Payment links — single/partial-use links with lifecycle (SPEC §28) | 3 | #21 | pending | Token redemption bounds enforced; single-use rejected twice |
-| F18 | Communications domain — conversations, messages, delivery attempts, templates (SPEC §26) | 3 | #22 | pending | Consent-before-send; versioned templates; retry → dead-letter |
+| F11 | Sub-ledger posting implementation + GL reconciliation job (K5, R4) | 3 | #18 | **done** (PR #29) | Posting matrix enforced; daily reconciliation job; reversals append-only |
+| F12 | Promise-to-pay tracking + dunning orchestration (K2) | 3 | #19 | in-progress (re-dispatch) | Promise lifecycle; consent-checked sends; escalation ladder |
+| F16 | Disputes lifecycle — pause collections while disputed (SPEC §29) | 3 | #20 | **done** (PR #27) | Disputed receivable pauses automated dunning; resolution resumes |
+| F17 | Payment links — single/partial-use links with lifecycle (SPEC §28) | 3 | #21 | in-progress (re-dispatch) | Token redemption bounds enforced; single-use rejected twice |
+| F18 | Communications domain — conversations, messages, delivery attempts, templates (SPEC §26) | 3 | #22 | in-progress (re-dispatch) | Consent-before-send; versioned templates; retry → dead-letter |
 | F13 | Collections priority scoring + recommendation feedback loop (H7) | 4 | #23 | pending | Read-only over events; outcome feedback recorded; explainable |
 | F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | pending | Projections only; no fund-truth writes; predictions labeled |
 | F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | pending | Fixture replay is idempotent end-to-end |
@@ -44,10 +44,10 @@ collections-ops features are F8 + F9 (carried over from wave 2) and F11, F12, F1
 All seven ship in parallel — each owns one fresh module lane, no cross-lane imports:
 
 - `feat/collections-cases` → #8 (F8) — new lane `src/domain/collections/`
-- `feat/fx-postings` → #9 (F9) — extends `src/domain/shared/` FX kernel + allocation/receivable hooks
-- `feat/ledger-postings` → #18 (F11) — new lane `src/domain/ledger/`
+- `feat/fx-postings` → #9 (F9) — **merged as PR #28**
+- `feat/ledger-postings` → #18 (F11) — **merged as PR #29**
 - `feat/promises-dunning` → #19 (F12) — new lane `src/domain/promises/`
-- `feat/disputes` → #20 (F16) — new lane `src/domain/disputes/`
+- `feat/disputes` → #20 (F16) — **merged as PR #27**
 - `feat/payment-links` → #21 (F17) — new lane `src/domain/paymentlinks/`
 - `feat/communications` → #22 (F18) — new lane `src/domain/communications/`
 
@@ -61,3 +61,5 @@ All seven ship in parallel — each owns one fresh module lane, no cross-lane im
 Deferred (deliberately not scheduled — see SPEC §2/§33): cross-border payments, embedded
 finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC backend (§34/35 —
 domain core stays pure; API/auth layer lands after the domain is complete).
+
+**Wave-3 progress note (2026-09-03):** first dispatch delivered F9 (#28), F11 (#29), F16 (#27); five agents hit runtime limits, four re-dispatched (F8, F12, F17, F18). GitHub Actions runners were failing repo-wide (job startup `BlobNotFound`, including pre-existing main pushes) — local `typecheck + full suite` on Node 24 used as the verification gate for merges.
