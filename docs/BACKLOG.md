@@ -29,6 +29,9 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | #35 | **done** (PR #44) | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
 | F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | #36 | **done** (PR #42) | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
 | F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | #37 | **done** (PR #43) | Cadence/reliability/channel/exposure projections; every claim traceable to events |
+| F24 | Auth & RBAC domain core — users, roles, permission matrix, API keys, sessions (SPEC §34/§35) | 6 | #46 | **done** (PR #49) | Deny-by-default with audited denials; escalation guard; suspension cascade; no plaintext secret at rest |
+| F25 | Webhook subscriptions + signing + delivery domain — developer platform contracts (SPEC §53) | 6 | #47 | **done** (PR #50) | Revoked endpoints plan nothing; idempotent enqueue + sticky verification ledger; secret never in payloads |
+| F26 | Cross-border payments domain — corridors, FX quotes with expiry, transfer intents, fees (SPEC §33) | 6 | #48 | **done** (PR #51) | No cent created or destroyed; idempotent submit replay; quote frozen at authorization; no fund-truth writes |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -107,3 +110,24 @@ finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC b
 
 **Combined main after waves 4–5: 1959/1959 tests across 77 suites, typecheck clean (Node 24.19).**
 All 23 backlog features (F1–F23) are now merged. Remaining deferrals are deliberate (SPEC §2/§33/§34/§35): HTTP/API transport + auth, cross-border payments, embedded finance, field/offline mobile, USSD, developer platform — the domain core is complete and the API layer can now be built on top of it.
+
+## Wave-6 dispatch — platform services (2026-09-03)
+
+The three deferrals that were domain-representable, scheduled once the F1–F23 core was
+complete. Same discipline: one lane, one PR, one issue, full local gate before push.
+
+- `feat/auth-rbac` → #46 (F24) — lane `src/domain/auth/` — **merged as PR #49**
+- `feat/webhook-platform` → #47 (F25) — lane `src/domain/webhooks/` — **merged as PR #50**
+- `feat/cross-border` → #48 (F26) — lane `src/domain/crossborder/` — **merged as PR #51**
+
+**Wave-6 dispatch — COMPLETE (merged 2026-09-03):** PR #49 auth & RBAC (#46, +95 tests),
+PR #50 webhooks developer platform (#47, +57), PR #51 cross-border (#48, +63). The first
+agent pass was interrupted by subagent runtime limits; the dispatcher completed the draft
+lanes, fixed three draft spec defects (fee arithmetic expectations vs the flat+bps
+contract, replay semantics, cascade fixtures), and verified every gate locally before
+opening/merging each PR.
+
+**Combined main after wave 6: 2174/2174 tests across 91 suites, typecheck clean (Node 24.19).**
+Every backlog feature including the previously-deferred domain work (F1–F26) is merged.
+The only remaining roadmap item is the HTTP/API transport (wave 7) that mounts the
+completed capability layers — auth (#46) was its last domain dependency.

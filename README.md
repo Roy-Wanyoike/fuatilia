@@ -3,7 +3,7 @@
 <img src="docs/assets/readme/hero.png" alt="Fuatilia — receivables intelligence & collections infrastructure for African businesses" width="100%"/>
 
 [![CI](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml/badge.svg)](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml)
-![tests](https://img.shields.io/badge/domain%20tests-1%2C959%20passing-2fbf8f)
+![tests](https://img.shields.io/badge/domain%20tests-2%2C174%20passing-2fbf8f)
 ![typescript](https://img.shields.io/badge/TypeScript-strict-2d7ab3)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-5b8db8)
 [![License: MIT](https://img.shields.io/badge/license-MIT-c2913d)](LICENSE)
@@ -79,6 +79,9 @@ move money.
 | | `paymentlinks` | Secure single/partial-use payment links with bounded redemption |
 | | `communications` | Conversations, immutable template versions, retry → dead-letter, consent gate |
 | **Intelligence & Agent Platform** | `behavior` | Customer behavior profiles + explainable anomaly detection |
+| | `auth` | Org-scoped users, RBAC permission matrix, API keys, sessions — deny-by-default with audited denials |
+| | `webhooks` | Endpoint registry, subscription grammar, pure signing contract, idempotent delivery with retry → dead-letter |
+| | `crossborder` | Corridors, exact-rational FX quotes with expiry, transfer intents with idempotent submit (R9/C5) |
 | | `intelligence` | Collections priority scoring + recommendation feedback loop |
 | | `projections` | Segment strategies + reporting projections (always labeled, never balances) |
 | | `adapters/daraja` | Callback conformance suite — fixtures + at-least-once replay |
@@ -115,7 +118,7 @@ npm run typecheck   # strict TypeScript
 npm test            # full domain suite
 ```
 
-**1,959 tests across 77 suites**, all green on Node 24 before any merge.
+**2,174 tests across 91 suites**, all green on Node 24 before any merge.
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
@@ -163,7 +166,8 @@ Requires Node ≥ 22.
 | 3 | Collections ops: cases, ledger, FX, promises/dunning, disputes, links, comms | ✅ merged |
 | 4 | Intelligence: priority scoring, projections, Daraja conformance, behavior profiles | ✅ merged |
 | 5 | Agent-ready platform: policy engine, agent capabilities, next-best-action, financial memory | ✅ merged |
-| 6 | HTTP/API transport + auth (the domain core is complete — this is next) | ⏳ deliberate deferral |
+| 6 | Platform services: auth & RBAC, webhook developer platform, cross-border corridors & quotes | ✅ merged |
+| 7 | HTTP/API transport mounting the capability layers on the completed domain core | ⏳ next |
 
 ## Ecosystem
 
