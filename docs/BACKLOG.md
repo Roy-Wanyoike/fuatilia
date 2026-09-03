@@ -25,10 +25,10 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | pending | Projections only; no fund-truth writes; predictions labeled |
 | F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | pending | Fixture replay is idempotent end-to-end |
 | F19 | Customer behavior profiles + anomaly detection (SPEC §4/§24) | 4 | #26 | pending | Metrics fixture-tested; explainable anomaly events |
-| F20 | Policy engine — deterministic allow/deny/require-approval governance for automated actions (VISION §3.9) | 5 | TBD | pending | Every automated action evaluated; refusals carry machine-readable reasons + audit events |
-| F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | TBD | pending | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
-| F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | TBD | pending | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
-| F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | TBD | pending | Cadence/reliability/channel/exposure projections; every claim traceable to events |
+| F20 | Policy engine — deterministic allow/deny/require-approval governance for automated actions (VISION §3.9) | 5 | #34 | pending | Every automated action evaluated; refusals carry machine-readable reasons + audit events |
+| F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | #35 | pending | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
+| F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | #36 | pending | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
+| F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | #37 | pending | Cadence/reliability/channel/exposure projections; every claim traceable to events |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
