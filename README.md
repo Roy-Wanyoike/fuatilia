@@ -20,6 +20,10 @@ same Kenyan fintech family, TypeScript end to end.
 3. **Channel input is untrusted** — Daraja callbacks are at-least-once; intake is idempotent by
    construction (`unique(channel, externalRef)`).
 4. **Kenya-native** — M-Pesa/Daraja, eTIMS invoice numbering, DPA 2019 consent, WhatsApp opt-in.
+5. **Agent-ready by design** — Fuatilia exposes financial capabilities through governed APIs and
+   events so humans, software integrations, and AI agents can safely reason over and act on
+   receivables without bypassing financial controls. The long-term thesis lives in
+   [`docs/VISION.md`](docs/VISION.md).
 
 ## Repository layout
 
@@ -57,9 +61,11 @@ Vitest, built with `tsc`.
 
 ## Documentation
 
-Start at [`docs/README.md`](docs/README.md) — nine docs covering the context map, domain model,
+Start at [`docs/README.md`](docs/README.md) — covering the context map, domain model,
 state machines, the 27-event catalog, data dictionary, review findings (C1–C5, H1–H7, K1–K6),
-testable invariants (R1–R10), and the three-phase build plan.
+testable invariants (R1–R10), and the three-phase build plan. [`docs/VISION.md`](docs/VISION.md)
+is the 10–15 year product thesis: the receivables intelligence layer that AI agents, payment
+rails, banks and ERPs plug into — agent-ready by design.
 
 ## License
 

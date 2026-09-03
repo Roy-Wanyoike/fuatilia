@@ -25,6 +25,10 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | pending | Projections only; no fund-truth writes; predictions labeled |
 | F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | pending | Fixture replay is idempotent end-to-end |
 | F19 | Customer behavior profiles + anomaly detection (SPEC §4/§24) | 4 | #26 | pending | Metrics fixture-tested; explainable anomaly events |
+| F20 | Policy engine — deterministic allow/deny/require-approval governance for automated actions (VISION §3.9) | 5 | TBD | pending | Every automated action evaluated; refusals carry machine-readable reasons + audit events |
+| F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | TBD | pending | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
+| F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | TBD | pending | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
+| F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | TBD | pending | Cadence/reliability/channel/exposure projections; every claim traceable to events |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -62,9 +66,36 @@ All seven ship in parallel — each owns one fresh module lane, no cross-lane im
 - `feat/daraja-conformance` → #25 (F15) — new lane `src/adapters/daraja/`
 - `feat/behavior-profiles` → #26 (F19) — new lane `src/domain/behavior/`
 
+## Wave-5 dispatch — agent-ready platform (queued after wave-4 merge)
+
+Derived from [`docs/VISION.md`](VISION.md) (the 10–15 year thesis: Fuatilia as the receivables
+intelligence layer that AI agents, payment rails, banks and ERPs plug into). Four fresh lanes,
+all domain-pure and parallel-safe — no HTTP transport yet (SPEC §34/35 deferral stands; these
+are the capability layers the transport will expose):
+
+- `feat/policy-engine` → F20 — new lane `src/domain/policy/` — deterministic
+  allow/deny/require-approval governance with machine-readable reasons + audit events; the
+  safety layer between AI and financial execution.
+- `feat/agent-capabilities` → F21 — new lane `src/domain/agent/` — capability queries
+  (financial-state, receivables priorities, collections recommendations) with evidence refs;
+  read-only over events/projections.
+- `feat/next-best-action` → F22 — new lane `src/domain/nba/` — explainable action ranking
+  (call/WhatsApp/SMS/plan/link/review/escalate/do-nothing) with cost/benefit + policy filter
+  and feedback hook.
+- `feat/financial-memory` → F23 — new lane `src/domain/memory/` — event-derived behavioral
+  features (payment cadence, promise reliability, channel preference, exposure) with an
+  evidence trail behind every claim.
+
+**Vision note (2026-09-03):** the owner ratified the agent-ready platform direction —
+README Design Principle 5 ("Agent-ready by design") added; `docs/VISION.md` records the
+three-layer platform (Financial Truth / Intelligence / Execution + Business Memory + Agent
+Interface), the deterministic-vs-AI divide, ecosystem position (SharkPay moves money,
+Fuatilia understands & collects; MjengoOS and future SaaS embed "Collections powered by
+Fuatilia"), and the staged monetization layers.
+
 Deferred (deliberately not scheduled — see SPEC §2/§33): cross-border payments, embedded
-finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC backend (§34/35 —
-domain core stays pure; API/auth layer lands after the domain is complete).
+finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC backend
+(§34/35 — domain core stays pure; API/auth layer lands after the domain is complete).
 
 **Wave-3 progress note (2026-09-03):** first dispatch delivered F9 (#28), F11 (#29), F16 (#27); five agents hit runtime limits, four re-dispatched (F8, F12, F17, F18). GitHub Actions runners were failing repo-wide (job startup `BlobNotFound`, including pre-existing main pushes) — local `typecheck + full suite` on Node 24 used as the verification gate for merges.
 
