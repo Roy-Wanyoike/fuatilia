@@ -32,6 +32,10 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F24 | Auth & RBAC domain core — users, roles, permission matrix, API keys, sessions (SPEC §34/§35) | 6 | #46 | **done** (PR #49) | Deny-by-default with audited denials; escalation guard; suspension cascade; no plaintext secret at rest |
 | F25 | Webhook subscriptions + signing + delivery domain — developer platform contracts (SPEC §53) | 6 | #47 | **done** (PR #50) | Revoked endpoints plan nothing; idempotent enqueue + sticky verification ledger; secret never in payloads |
 | F26 | Cross-border payments domain — corridors, FX quotes with expiry, transfer intents, fees (SPEC §33) | 6 | #48 | **done** (PR #51) | No cent created or destroyed; idempotent submit replay; quote frozen at authorization; no fund-truth writes |
+| F27 | Maker-checker approval workflows — org policies, quorum, apply evidence (SPEC §36) | 7 | #52 | **done** (PR #56) | Self-approval refused; distinct-approver quorum; policies configurable per org; never executes the operation |
+| F28 | Unified append-only audit trail — redaction + hash chain (SPEC §37) | 7 | #53 | **done** (PR #57) | Every §37 field representable; append-only at the type level; tamper detection; AI actions auditable |
+| F29 | USSD session workflows for low-tech channels (SPEC §31) | 7 | #54 | **done** (PR #58) | Five flows over injected ports; screen budget enforced; i18n keys never copy; no fund-truth writes |
+| F30 | HTTP transport kernel — /v1 router, auth middleware, error mapping (SPEC §38) | 7 | #55 | **done** (PR #59) | Zero new deps; consistent envelope + pagination; 401/403 semantics; every denial audited |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -131,3 +135,28 @@ opening/merging each PR.
 Every backlog feature including the previously-deferred domain work (F1–F26) is merged.
 The only remaining roadmap item is the HTTP/API transport (wave 7) that mounts the
 completed capability layers — auth (#46) was its last domain dependency.
+
+## Wave-7 dispatch — governance + transport (2026-09-04)
+
+The final domain gaps (maker-checker §36, unified audit §37, USSD §31 — never
+scheduled before because the F1–F26 core came first) plus the transport that
+mounts everything. Four disjoint lanes, zero file overlap:
+
+- `feat/approvals` → #52 (F27) — lane `src/domain/approvals/` — **merged as PR #56**
+- `feat/audit-trail` → #53 (F28) — lane `src/domain/audit/` — **merged as PR #57**
+- `feat/ussd-workflows` → #54 (F29) — lane `src/domain/ussd/` — **merged as PR #58**
+- `feat/http-kernel` → #55 (F30) — lane `src/adapters/http/` — **merged as PR #59**
+
+**Wave-7 dispatch — COMPLETE (merged 2026-09-04):** PR #56 approvals (+67 tests),
+PR #57 audit trail (+78), PR #58 USSD (+94), PR #59 HTTP kernel (+118). Both agent
+passes were stopped by the same subagent infra timeouts documented in waves 3–6;
+the dispatcher completed every lane from the drafted work, fixing draft-spec defects
+(threshold-currency validation order, in-loop org isolation, purity of the matched
+policy copy, terminal-cancel refusal-as-value, optional terminal options, back-key
+trail popping, reserved-key precedence, seed granter-permission expansion, the
+SESSION_* error-family mapping) before opening and merging each PR.
+
+**Combined main after wave 7: 2531/2531 tests across 106 suites, typecheck clean (Node 24.19).**
+All 30 backlog features (F1–F30) are merged. The domain core, governance layer and the
+first transport surface are complete; further waves mount more /v1 resources on the
+kernel's route table without touching kernel files.

@@ -89,6 +89,10 @@ move money.
 | | `agent` | Capability queries (financial state, priorities, recommendations) with evidence |
 | | `nba` | Next-best-action ranking — explainable, policy-filtered, feedback-aware |
 | | `memory` | Event-derived customer financial memory, every claim traceable |
+| | `approvals` | Maker-checker approval workflows — org policies, distinct-approver quorum, self-approval guard |
+| | `audit` | Unified append-only audit trail — redaction, hash-chain integrity, event projection |
+| | `ussd` | USSD session state machine + five low-tech flows over read-only capability ports |
+| **Transport** | `adapters/http` | Zero-dep /v1 kernel — router, §38 error mapping, pagination, auth middleware (401/403, audited denials) |
 
 ## Engineering that matters
 
@@ -118,7 +122,7 @@ npm run typecheck   # strict TypeScript
 npm test            # full domain suite
 ```
 
-**2,174 tests across 91 suites**, all green on Node 24 before any merge.
+**2,531 tests across 106 suites**, all green on Node 24 before any merge.
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
@@ -167,7 +171,7 @@ Requires Node ≥ 22.
 | 4 | Intelligence: priority scoring, projections, Daraja conformance, behavior profiles | ✅ merged |
 | 5 | Agent-ready platform: policy engine, agent capabilities, next-best-action, financial memory | ✅ merged |
 | 6 | Platform services: auth & RBAC, webhook developer platform, cross-border corridors & quotes | ✅ merged |
-| 7 | HTTP/API transport mounting the capability layers on the completed domain core | ⏳ next |
+| 7 | Governance & governance surfaces: maker-checker approvals, unified audit trail, USSD workflows, HTTP /v1 kernel | ✅ merged |
 
 ## Ecosystem
 
