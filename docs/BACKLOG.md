@@ -21,14 +21,14 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F16 | Disputes lifecycle — pause collections while disputed (SPEC §29) | 3 | #20 | **done** (PR #27) | Disputed receivable pauses automated dunning; resolution resumes |
 | F17 | Payment links — single/partial-use links with lifecycle (SPEC §28) | 3 | #21 | **done** (PR #30) | Token redemption bounds enforced; single-use rejected twice |
 | F18 | Communications domain — conversations, messages, delivery attempts, templates (SPEC §26) | 3 | #22 | **done** (PR #32) | Consent-before-send; versioned templates; retry → dead-letter |
-| F13 | Collections priority scoring + recommendation feedback loop (H7) | 4 | #23 | pending | Read-only over events; outcome feedback recorded; explainable |
-| F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | pending | Projections only; no fund-truth writes; predictions labeled |
-| F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | pending | Fixture replay is idempotent end-to-end |
-| F19 | Customer behavior profiles + anomaly detection (SPEC §4/§24) | 4 | #26 | pending | Metrics fixture-tested; explainable anomaly events |
-| F20 | Policy engine — deterministic allow/deny/require-approval governance for automated actions (VISION §3.9) | 5 | #34 | pending | Every automated action evaluated; refusals carry machine-readable reasons + audit events |
-| F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | #35 | pending | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
-| F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | #36 | pending | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
-| F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | #37 | pending | Cadence/reliability/channel/exposure projections; every claim traceable to events |
+| F13 | Collections priority scoring + recommendation feedback loop (H7) | 4 | #23 | **done** (PR #38) | Read-only over events; outcome feedback recorded; explainable |
+| F14 | Segment strategies + reporting projections (SPEC §19/§20/§66) | 4 | #24 | **done** (PR #39) | Projections only; no fund-truth writes; predictions labeled |
+| F15 | Daraja adapter conformance suite (callback fixtures, at-least-once replay) | 4 | #25 | **done** (PR #45) | Fixture replay is idempotent end-to-end |
+| F19 | Customer behavior profiles + anomaly detection (SPEC §4/§24) | 4 | #26 | **done** (PR #40) | Metrics fixture-tested; explainable anomaly events |
+| F20 | Policy engine — deterministic allow/deny/require-approval governance for automated actions (VISION §3.9) | 5 | #34 | **done** (PR #41) | Every automated action evaluated; refusals carry machine-readable reasons + audit events |
+| F21 | Agent capability layer — financial-state projection, receivables priorities, collections recommendations (VISION §3.8) | 5 | #35 | **done** (PR #44) | Capability queries (not CRUD); every answer carries evidence refs; no fund-truth writes |
+| F22 | Next-best-action engine — explainable action selection with cost/benefit + policy filter (VISION §3.4) | 5 | #36 | **done** (PR #42) | Ranks actions with reasons; policy-gated; "do nothing" representable; feedback hook |
+| F23 | Explainable financial memory — event-derived behavioral features with evidence trail (VISION §3.3/§3.7) | 5 | #37 | **done** (PR #43) | Cadence/reliability/channel/exposure projections; every claim traceable to events |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -100,3 +100,10 @@ finance, field/offline mobile, USSD APIs, developer platform (§53), auth/RBAC b
 **Wave-3 progress note (2026-09-03):** first dispatch delivered F9 (#28), F11 (#29), F16 (#27); five agents hit runtime limits, four re-dispatched (F8, F12, F17, F18). GitHub Actions runners were failing repo-wide (job startup `BlobNotFound`, including pre-existing main pushes) — local `typecheck + full suite` on Node 24 used as the verification gate for merges.
 
 **Wave-3 dispatch — COMPLETE (merged 2026-09-03):** PR #30 payment links (#21), PR #31 collections cases (#8), PR #32 communications (#22), PR #33 promises+dunning (#19), plus earlier PR #27 disputes (#20), PR #28 FX (#9), PR #29 ledger (#18). Combined main: 1044/1044 tests green (Node 24.19, typecheck clean).
+
+**Wave-4 dispatch — COMPLETE (merged 2026-09-03):** PR #38 collections intelligence (#23, +76 tests), PR #39 projections (#24, +184), PR #40 behavior profiles (#26, +98), PR #45 daraja conformance (#25, +37). Four agents hit runtime limits mid-run; the dispatcher audited/completed the interrupted drafts and verified every lane locally before merge.
+
+**Wave-5 dispatch — agent-ready platform — COMPLETE (merged 2026-09-03):** PR #41 policy engine (#34, +214 tests), PR #42 next-best-action (#36, +67), PR #43 financial memory (#37, +130), PR #44 agent capabilities (#35, +109). Same pattern: subagent infra timeouts interrupted the first pass; the dispatcher completed and verified the lanes (fixing draft defects — scorer-bar misalignments in agent-lane specs, world/record contract break in the daraja simulator, branded-Uuid reconciliation types) before opening/merging each PR.
+
+**Combined main after waves 4–5: 1959/1959 tests across 77 suites, typecheck clean (Node 24.19).**
+All 23 backlog features (F1–F23) are now merged. Remaining deferrals are deliberate (SPEC §2/§33/§34/§35): HTTP/API transport + auth, cross-border payments, embedded finance, field/offline mobile, USSD, developer platform — the domain core is complete and the API layer can now be built on top of it.

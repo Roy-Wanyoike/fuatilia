@@ -3,7 +3,7 @@
 <img src="docs/assets/readme/hero.png" alt="Fuatilia — receivables intelligence & collections infrastructure for African businesses" width="100%"/>
 
 [![CI](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml/badge.svg)](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml)
-![tests](https://img.shields.io/badge/domain%20tests-1%2C044%20passing-2fbf8f)
+![tests](https://img.shields.io/badge/domain%20tests-1%2C959%20passing-2fbf8f)
 ![typescript](https://img.shields.io/badge/TypeScript-strict-2d7ab3)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-5b8db8)
 [![License: MIT](https://img.shields.io/badge/license-MIT-c2913d)](LICENSE)
@@ -78,7 +78,7 @@ move money.
 | | `disputes` | Dispute lifecycle that automatically pauses collections, resume on resolution |
 | | `paymentlinks` | Secure single/partial-use payment links with bounded redemption |
 | | `communications` | Conversations, immutable template versions, retry → dead-letter, consent gate |
-| **Intelligence & Agent Platform** *(in flight)* | `behavior` | Customer behavior profiles + explainable anomaly detection |
+| **Intelligence & Agent Platform** | `behavior` | Customer behavior profiles + explainable anomaly detection |
 | | `intelligence` | Collections priority scoring + recommendation feedback loop |
 | | `projections` | Segment strategies + reporting projections (always labeled, never balances) |
 | | `adapters/daraja` | Callback conformance suite — fixtures + at-least-once replay |
@@ -115,7 +115,7 @@ npm run typecheck   # strict TypeScript
 npm test            # full domain suite
 ```
 
-**1,044 tests across 44 suites** (and growing every wave), all green on Node 24 before any merge.
+**1,959 tests across 77 suites**, all green on Node 24 before any merge.
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
@@ -161,9 +161,9 @@ Requires Node ≥ 22.
 | 1 | Fund truth: receivables, payments, adjustments | ✅ merged |
 | 2 | Allocation engine, event catalog, late fees + plans, consent/eTIMS | ✅ merged |
 | 3 | Collections ops: cases, ledger, FX, promises/dunning, disputes, links, comms | ✅ merged |
-| 4 | Intelligence: priority scoring, projections, Daraja conformance, behavior profiles | 🔄 in flight |
-| 5 | Agent-ready platform: policy engine, agent capabilities, next-best-action, financial memory | 🔄 in flight |
-| 6 | HTTP/API transport + auth (after the domain is complete) | ⏳ deliberate deferral |
+| 4 | Intelligence: priority scoring, projections, Daraja conformance, behavior profiles | ✅ merged |
+| 5 | Agent-ready platform: policy engine, agent capabilities, next-best-action, financial memory | ✅ merged |
+| 6 | HTTP/API transport + auth (the domain core is complete — this is next) | ⏳ deliberate deferral |
 
 ## Ecosystem
 
