@@ -22,8 +22,15 @@ import { systemClock, type Clock } from '../../domain/shared/ids';
 import { createKernel, type Kernel } from './kernel/kernel';
 import type { HttpRequest, KernelResponse, RouteRecord } from './kernel/types';
 import { authPortFromStore, InMemoryAuthStore, type AuthStore } from './runtime/memory';
+import {
+  InMemoryResourceStore,
+  type ResourceStore,
+} from './runtime/resources';
 import { authRoutes } from './routes/auth';
 import { healthRoute, metaRoute } from './routes/public';
+import { receivablesRoutes } from './routes/receivables';
+import { paymentsRoutes } from './routes/payments';
+import { collectionsRoutes } from './routes/collections';
 
 export interface HttpKernelOptions {
   /** Injected clock (default: system). Feeds every audited denial timestamp. */
@@ -34,6 +41,11 @@ export interface HttpKernelOptions {
   readonly maxBodyBytes?: number;
   /** Auth-lane state (default: a fresh empty in-memory store). */
   readonly store?: AuthStore;
+  /**
+   * Resource state for the mounted /v1/payments|receivables|collections
+   * tables (issue #60; default: a fresh empty in-memory store).
+   */
+  readonly resourceStore?: ResourceStore;
   /** Observability sink for internal errors — never the response body. */
   readonly onError?: (error: unknown, requestId: string) => void;
 }
@@ -53,12 +65,15 @@ export interface HttpKernel {
   readonly routes: readonly RouteRecord[];
   /** The auth-lane state backing the routes (seed/inspect in tests). */
   readonly store: AuthStore;
+  /** The resource state backing the mounted resource tables (issue #60). */
+  readonly resources: ResourceStore;
   /** Spin the real node:http server (port 0 = ephemeral). */
   listen(port?: number): Promise<ListenedServer>;
 }
 
 export function createHttpKernel(options: HttpKernelOptions = {}): HttpKernel {
   const store = options.store ?? new InMemoryAuthStore();
+  const resources = options.resourceStore ?? new InMemoryResourceStore();
   const clock = options.clock ?? systemClock;
   const idGen = options.idGen ?? freshUuid;
   const maxBodyBytes = options.maxBodyBytes;
@@ -66,12 +81,27 @@ export function createHttpKernel(options: HttpKernelOptions = {}): HttpKernel {
   // Auth lane → kernel ports.
   const auth = authPortFromStore(store, clock);
 
-  // Route table: public rows + the /v1/auth admin table (later waves append).
+  // Route table: public rows + the /v1/auth admin table (issue #55) + the
+  // mounted resource tables (issue #60 — appended rows, no kernel changes).
   const adminTable = authRoutes({ store, clock, idGen });
+  const resourceTable: readonly RouteRecord[] = [
+    ...receivablesRoutes({ store: resources, clock, idGen }),
+    ...paymentsRoutes({ store: resources, clock, idGen }),
+    ...collectionsRoutes({ store: resources, clock, idGen }),
+  ];
   const capabilities = [
-    ...new Set(adminTable.map((route) => route.pattern.split('/')[2] ?? '').filter((s) => s !== '')),
+    ...new Set(
+      [...adminTable, ...resourceTable]
+        .map((route) => route.pattern.split('/')[2] ?? '')
+        .filter((s) => s !== ''),
+    ),
   ].sort();
-  const routes: readonly RouteRecord[] = [healthRoute(), metaRoute(capabilities), ...adminTable];
+  const routes: readonly RouteRecord[] = [
+    healthRoute(),
+    metaRoute(capabilities),
+    ...adminTable,
+    ...resourceTable,
+  ];
 
   const kernel: Kernel = createKernel({
     routes,
@@ -135,5 +165,5 @@ export function createHttpKernel(options: HttpKernelOptions = {}): HttpKernel {
       });
     });
 
-  return { handle: kernel.handle, routes: kernel.routes, store, listen };
+  return { handle: kernel.handle, routes: kernel.routes, store, resources, listen };
 }
