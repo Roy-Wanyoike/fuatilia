@@ -1,0 +1,2693 @@
+# =============================================================================
+# FuatiliA — /v1 machine-readable contract (issue #67, wave 9 "Production W1")
+# =============================================================================
+# Documents EXACTLY what is mounted today on the HTTP kernel
+# (src/adapters/http/ — issues #55/#60). NOTHING here is aspirational:
+# every path/method below is a row in a real route table
+# (routes/public.ts, routes/auth.ts, routes/receivables.ts,
+# routes/payments.ts, routes/collections.ts — 22 operations over 21 paths).
+#
+# Wire rules derived from kernel/kernel.ts (do not guess, read the source):
+#   - Every response carries `x-request-id` (echoed from the request's
+#     x-request-id / x-correlation-id header, else generated).
+#   - Success envelope: `{ "data": <payload>, "meta"?: <object> }`.
+#   - Error envelope:   `{ "error": { "code": SCREAMING_SNAKE, "message" }, "requestId" }`.
+#   - Unmapped/internal failures fail CLOSED to 500 HTTP_INTERNAL_ERROR with a
+#     generic "internal server error" message — internals never leak.
+# =============================================================================
+openapi: 3.1.0
+info:
+  title: Fuatilia API
+  version: 1.0.0
+  summary: AR/collections platform for Kenya — the mounted /v1 JSON surface.
+  description: |
+    The versioned JSON surface of the FuatiliA AR/collections platform,
+    served by the deterministic HTTP kernel (`src/adapters/http/`).
+
+    **Envelope.** Successes are `{ "data": ..., "meta"?: ... }` (meta appears
+    on paginated lists as `meta.pagination`). Failures are
+    `{ "error": { "code", "message" }, "requestId" }` where `code` is a stable
+    SCREAMING_SNAKE_CASE code — clients branch on codes, never on prose.
+
+    **Authentication.** Protected operations accept EITHER credential:
+
+    * `Authorization: Bearer <sessionToken>` — an auth-lane session id;
+    * `Authorization: ApiKey <keyId>.<secret>` — split at the FIRST dot.
+
+    Public operations (`GET /v1/health`, `GET /v1/meta`) never attempt
+    authentication. Deny-by-default is audited: every 401/403 refusal is
+    recorded as an `auth.accessDenied` fact upstream; no secret material is
+    ever echoed back.
+
+    **401 vs 403.** `401` = no/malformed header or the lane refused the
+    credential — the auth lane's stable denial code passes through
+    (`KEY_UNKNOWN`, `KEY_SECRET_MISMATCH`, `KEY_REVOKED`, `KEY_EXPIRED`,
+    `KEY_OWNER_INACTIVE`, `PRINCIPAL_UNKNOWN`, `SESSION_IDLE_EXPIRED`,
+    `SESSION_ABSOLUTE_EXPIRED`, `SESSION_REVOKED`, `SESSION_ENDED`, …).
+    `403` = authenticated but not authorized — `AUTH_ACCESS_DENIED` (the
+    message IS the guard's denial detail, e.g. "no active grant or scope
+    covers 'payments:read' — deny by default"), or the domain blockers
+    `AUTH_ESCALATION_BLOCKED` (role grants) and `DUNNING_CONSENT_REQUIRED`
+    (automated outbound dunning without consent).
+
+    **Routing.** `/v1`-prefixed, case-sensitive, one optional trailing slash.
+    Unknown path → 404 `HTTP_ROUTE_NOT_FOUND`; known path with the wrong
+    method → 405 `HTTP_METHOD_NOT_ALLOWED` + an `allow` header. Request JSON
+    bodies are capped (default 1 MiB) — over-limit → 413
+    `HTTP_PAYLOAD_TOO_LARGE`; non-JSON → 400 `HTTP_BODY_MALFORMED`. Any
+    handler-level internal failure → 500 `HTTP_INTERNAL_ERROR` (generic).
+
+    **Pagination.** List operations take `limit` (integer 1–100, default 20 —
+    boundaries are STRICT, the kernel never clamps), an opaque `cursor`
+    (reference implementation: offset into the deterministic order) and
+    `sort`/`order` against a per-resource whitelist. Violations answer 400
+    `HTTP_QUERY_INVALID`. Page metadata rides in `meta.pagination`
+    (`nextCursor` + `total`).
+  license:
+    name: MIT
+    url: https://github.com/Roy-Wanyoike/fuatilia/blob/main/LICENSE
+servers:
+  - url: http://localhost:3000
+    description: >
+      Local composition example. The reference kernel binds an EPHEMERAL port
+      in tests (`server.ts` `listen(port=0)`); no production URL is deployed
+      yet, so this entry documents the shape of a base URL, not a real host.
+tags:
+  - name: Health
+    description: Public liveness + capability discovery.
+  - name: Auth Admin
+    description: >
+      User / role-grant / api-key / session administration over the auth lane.
+      Every operation requires the `admin:manage-users` vocabulary permission.
+  - name: Receivables
+    description: >
+      The receivable read model (aging + balances). Read-only this wave —
+      rows arrive through the invoicing flow / persistence adapters.
+  - name: Payments
+    description: >
+      The fund-truth surface: the ONE Daraja at-least-once intake funnel
+      (C2B + STK), lookup/list and the refund-reservation lifecycle (R6).
+  - name: Collections
+    description: >
+      Collections cases: open / transition / escalate / record action /
+      complete action, plus the org-scoped case read model (R8 exclusivity,
+      K2 dunning consent).
+
+# Root security: protected operations accept Bearer session OR ApiKey.
+# Public operations override with `security: []`.
+security:
+  - bearerSession: []
+  - apiKeyAuth: []
+
+paths:
+
+  # ===========================================================================
+  # Public (no-auth) routes — routes/public.ts
+  # ===========================================================================
+
+  /v1/health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      summary: Liveness probe.
+      description: >
+        Public. The kernel never attempts authentication on rows without a
+        permission (`ctx.principal` stays null). Answers the plain success
+        envelope with the service's liveness verdict.
+      security: []
+      x-required-permission: null
+      responses:
+        '200':
+          description: The service is alive.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HealthResponse'}
+              example:
+                data:
+                  status: ok
+
+  /v1/meta:
+    get:
+      tags: [Health]
+      operationId: getMeta
+      summary: Service name, API version and the mounted capability list.
+      description: >
+        Public. `capabilities` is DERIVED from the route table at composition
+        (the third `/v1/<segment>` of every mounted pattern, sorted, unique) —
+        later waves that mount more resources surface here without code
+        changes. Today: `["auth", "collections", "payments", "receivables"]`.
+      security: []
+      x-required-permission: null
+      responses:
+        '200':
+          description: The capability list for this deployment.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MetaResponse'}
+              example:
+                data:
+                  name: fuatilia
+                  apiVersion: v1
+                  capabilities: [auth, collections, payments, receivables]
+
+  # ===========================================================================
+  # /v1/auth/* admin table — routes/auth.ts (permission: admin:manage-users)
+  # ===========================================================================
+
+  /v1/auth/users:
+    post:
+      tags: [Auth Admin]
+      operationId: createUser
+      summary: Create a user in the caller's org.
+      description: >
+        Requires `admin:manage-users`. The new user is scoped to the
+        authenticated principal's org (`principal.orgId`); the wire handler
+        validates the body shape (400 `HTTP_BODY_INVALID`), then the auth
+        lane re-validates values (`AUTH_EMAIL_MALFORMED` → 400,
+        `AUTH_EMAIL_TAKEN` / `AUTH_USERNAME_TAKEN` → 409). Emits the lane's
+        `auth.userCreated` fact.
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateUserBody'}
+            example:
+              email: mary.wanjiku@mjengo.co.ke
+              username: mwanjiku
+              displayName: Mary Wanjiku
+      responses:
+        '201':
+          description: User created.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserCreatedResponse'}
+              example:
+                data:
+                  user:
+                    id: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    email: mary.wanjiku@mjengo.co.ke
+                    username: mwanjiku
+                    displayName: Mary Wanjiku
+                    status: active
+                    createdAt: '2026-09-04T09:15:00.000Z'
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '409':
+          description: >
+            Uniqueness collision — the email or username is already taken in
+            this org (`AUTH_EMAIL_TAKEN` / `AUTH_USERNAME_TAKEN`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: AUTH_EMAIL_TAKEN
+                  message: email 'mary.wanjiku@mjengo.co.ke' is already registered in this org
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/auth/roles/grants:
+    post:
+      tags: [Auth Admin]
+      operationId: grantRole
+      summary: Grant a role to a user (escalation-guarded).
+      description: >
+        Requires `admin:manage-users`. Idempotent by value: replaying an
+        ACTIVE identical grant answers **200** with `alreadyHeld: true` and
+        the existing grant (a replay is never a second fact). The escalation
+        guard compares the granter's own CONCRETE effective permission set —
+        a granter cannot confer authority they do not hold — and refuses with
+        **403 `AUTH_ESCALATION_BLOCKED`** (refusal audited as
+        `auth.escalationBlocked`). Unknown role/user → 404
+        (`HTTP_ROLE_NOT_FOUND` / `HTTP_USER_NOT_FOUND`).
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GrantRoleBody'}
+            example:
+              userId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              roleId: 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f
+      responses:
+        '201':
+          description: Grant created.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GrantIssuedResponse'}
+              example:
+                data:
+                  grant:
+                    id: 5e6f7081-92a3-4b5c-8d6e-7f8091a2b3c4
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    userId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    roleId: 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f
+                    resourceId: null
+                    grantedBy: 00000000-0000-4000-8000-000000000902
+                    grantedAt: '2026-09-04T09:20:00.000Z'
+                    revokedAt: null
+                    revokedReason: null
+                  alreadyHeld: false
+        '200':
+          description: >
+            Idempotent replay — the user already actively holds an identical
+            grant; the EXISTING grant is returned with `alreadyHeld: true`.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GrantIssuedResponse'}
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/EscalationBlocked'}
+        '404':
+          description: >
+            The referenced role or user does not exist (`HTTP_ROLE_NOT_FOUND`
+            / `HTTP_USER_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_ROLE_NOT_FOUND
+                  message: role 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/auth/roles/revocations:
+    post:
+      tags: [Auth Admin]
+      operationId: revokeRole
+      summary: Revoke a user's active role grant.
+      description: >
+        Requires `admin:manage-users`. Revocation is a FACT (no DELETE
+        semantics over immutable facts): the active grant matching
+        (userId, roleId, resourceId) is stamped `revokedAt`/`revokedReason`.
+        Revoking a role the user does not actively hold refuses with 409
+        `AUTH_ROLE_NOT_HELD`.
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RevokeRoleBody'}
+            example:
+              userId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              roleId: 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f
+              reason: offboarded from the collections team
+      responses:
+        '200':
+          description: The grant (now revoked) in its post-fact shape.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GrantRevokedResponse'}
+              example:
+                data:
+                  grant:
+                    id: 5e6f7081-92a3-4b5c-8d6e-7f8091a2b3c4
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    userId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    roleId: 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f
+                    resourceId: null
+                    grantedBy: 00000000-0000-4000-8000-000000000902
+                    grantedAt: '2026-09-04T09:20:00.000Z'
+                    revokedAt: '2026-09-05T07:00:00.000Z'
+                    revokedReason: offboarded from the collections team
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: The referenced role does not exist (`HTTP_ROLE_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: >
+            The user does not actively hold this role in this scope
+            (`AUTH_ROLE_NOT_HELD` — revoking an unheld role is refused).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: AUTH_ROLE_NOT_HELD
+                  message: user 7c9e6679-7425-40de-944b-e07fc1f90ae7 does not actively hold role 2b7f4a10-1c22-4d3e-9a41-6f8b0c2d3e4f in this scope — revoking an unheld role is refused
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/auth/api-keys:
+    post:
+      tags: [Auth Admin]
+      operationId: issueApiKey
+      summary: Issue an API key (caller-supplied secret; prefix-only response).
+      description: >
+        Requires `admin:manage-users`. Secret discipline (SPEC §34): the
+        caller SUPPLIES the secret in the request body (minimum 16 chars);
+        the response carries the visible PREFIX (first 8 chars) plus scopes —
+        neither the raw secret nor its hash is ever echoed, logged or stored.
+        Scopes must be a non-empty array of CONCRETE permissions from the
+        closed vocabulary (`AUTH_PERMISSION_UNKNOWN` /
+        `AUTH_PERMISSION_WILDCARD_FORBIDDEN` → 400). Duplicate key id → 409
+        `AUTH_KEY_ID_TAKEN`; prefix collision or stale expiry → 409
+        `AUTH_KEY_PREFIX_TAKEN` / 400 `AUTH_KEY_EXPIRY_INVALID`.
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueKeyBody'}
+            example:
+              name: mjengoos-intake
+              secret: fy-local-dev-secret-0001
+              scopes: [payments:intake, payments:read]
+              expiresAt: '2027-01-01T00:00:00.000Z'
+      responses:
+        '201':
+          description: Key issued — prefix + scopes only, never secret material.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/KeyIssuedResponse'}
+              example:
+                data:
+                  key:
+                    id: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    name: mjengoos-intake
+                    prefix: fy-local
+                    scopes: [payments:intake, payments:read]
+                    expiresAt: '2027-01-01T00:00:00.000Z'
+                    status: active
+                    createdAt: '2026-09-04T09:30:00.000Z'
+                    lastUsedAt: null
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '409':
+          description: >
+            `AUTH_KEY_ID_TAKEN` (id already exists) or
+            `AUTH_KEY_PREFIX_TAKEN` (another active key already shows the
+            first 8 chars of this secret — generate a fresh secret).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: AUTH_KEY_PREFIX_TAKEN
+                  message: api-key prefix 'fy-local' is already in use — generate a fresh secret
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/auth/api-keys/revocations:
+    post:
+      tags: [Auth Admin]
+      operationId: revokeApiKey
+      summary: Revoke an API key (idempotent).
+      description: >
+        Requires `admin:manage-users`. Revoking an already-revoked key is a
+        no-op answered with the key and `alreadyRevoked: true` (revocation is
+        a fact). Unknown key id → 404 `AUTH_KEY_NOT_FOUND`.
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RevokeKeyBody'}
+            example:
+              keyId: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+              reason: leaked in a bug report
+      responses:
+        '200':
+          description: The key in its post-revocation shape.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/KeyRevokedResponse'}
+              example:
+                data:
+                  key:
+                    id: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    name: mjengoos-intake
+                    prefix: fy-local
+                    scopes: [payments:intake, payments:read]
+                    expiresAt: '2027-01-01T00:00:00.000Z'
+                    status: revoked
+                    createdAt: '2026-09-04T09:30:00.000Z'
+                    lastUsedAt: '2026-09-04T11:00:00.000Z'
+                  alreadyRevoked: false
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No api key carries the presented id (`AUTH_KEY_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: AUTH_KEY_NOT_FOUND
+                  message: api key 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/auth/sessions/revocations:
+    post:
+      tags: [Auth Admin]
+      operationId: revokeSession
+      summary: Revoke a session (kill a live Bearer token).
+      description: >
+        Requires `admin:manage-users`. The session is stamped
+        `status: revoked` + `endedAt`/`endedReason`; its Bearer token
+        immediately refuses with 401 `SESSION_REVOKED`. Unknown session →
+        404 `HTTP_SESSION_NOT_FOUND`.
+      x-required-permission: admin:manage-users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RevokeSessionBody'}
+            example:
+              sessionId: a1b2c3d4-e5f6-4789-8a0b-1c2d3e4f5a6b
+              reason: user reported a stolen laptop
+      responses:
+        '200':
+          description: The session in its post-revocation shape.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionRevokedResponse'}
+              example:
+                data:
+                  session:
+                    id: a1b2c3d4-e5f6-4789-8a0b-1c2d3e4f5a6b
+                    userId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    status: revoked
+                    createdAt: '2026-09-04T08:00:00.000Z'
+                    lastSeenAt: '2026-09-04T09:59:00.000Z'
+                    endedAt: '2026-09-04T10:00:00.000Z'
+                    endedReason: user reported a stolen laptop
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: The session does not exist (`HTTP_SESSION_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_SESSION_NOT_FOUND
+                  message: session a1b2c3d4-e5f6-4789-8a0b-1c2d3e4f5a6b does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  # ===========================================================================
+  # /v1/receivables — routes/receivables.ts (permission: receivables:read)
+  # ===========================================================================
+
+  /v1/receivables:
+    get:
+      tags: [Receivables]
+      operationId: listReceivables
+      summary: List the receivable read model (paginated).
+      description: >
+        Requires `receivables:read`. Deterministic offset pagination over the
+        reference store: the opaque `cursor` is the offset into the ordered
+        list; `meta.pagination.total` is the full ordered length. Sort
+        whitelist: `id`, `state`, `dueDate` (anything else → 400
+        `HTTP_QUERY_INVALID`).
+      x-required-permission: receivables:read
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/ReceivableSort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of receivable views.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceivableListResponse'}
+              example:
+                data:
+                  receivables:
+                    - id: 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4
+                      invoiceId: 0f1e2d3c-4b5a-4968-8776-6554433221ff
+                      customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                      currency: KES
+                      original: {minor: 12500000, currency: KES}
+                      applied: {minor: 5000000, currency: KES}
+                      balance: {minor: 7500000, currency: KES}
+                      state: partially_paid
+                      overdue: true
+                      openedAt: '2026-08-01T10:00:00.000Z'
+                      dueDate: '2026-08-15T00:00:00.000Z'
+                      settledAt: null
+                      voidedAt: null
+                      writeOff: null
+                      uncollectibleReason: null
+                      uncollectibleAt: null
+                      recoveredAt: null
+                      aging: {daysPastDue: 20, bucket: '0-30'}
+                meta:
+                  pagination:
+                    nextCursor: '20'
+                    total: 42
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+
+  /v1/receivables/{receivableId}:
+    get:
+      tags: [Receivables]
+      operationId: getReceivable
+      summary: Fetch one receivable view (aging + balance).
+      description: >
+        Requires `receivables:read`. `balance` is the lane's own R1 math
+        (original − applied). A SETTLED receivable answers `aging: null`
+        (the lane refuses to age settled money — nothing left to age).
+        Unknown id → 404 `HTTP_RECEIVABLE_NOT_FOUND`.
+      x-required-permission: receivables:read
+      parameters:
+        - {$ref: '#/components/parameters/ReceivableId'}
+      responses:
+        '200':
+          description: The receivable view.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReceivableResponse'}
+              example:
+                data:
+                  receivable:
+                    id: 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4
+                    invoiceId: 0f1e2d3c-4b5a-4968-8776-6554433221ff
+                    customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                    currency: KES
+                    original: {minor: 12500000, currency: KES}
+                    applied: {minor: 5000000, currency: KES}
+                    balance: {minor: 7500000, currency: KES}
+                    state: partially_paid
+                    overdue: true
+                    openedAt: '2026-08-01T10:00:00.000Z'
+                    dueDate: '2026-08-15T00:00:00.000Z'
+                    settledAt: null
+                    voidedAt: null
+                    writeOff: null
+                    uncollectibleReason: null
+                    uncollectibleAt: null
+                    recoveredAt: null
+                    aging: {daysPastDue: 20, bucket: '0-30'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No receivable carries the id (`HTTP_RECEIVABLE_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_RECEIVABLE_NOT_FOUND
+                  message: receivable 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4 does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+  # ===========================================================================
+  # /v1/payments — routes/payments.ts
+  #   intake/confirmations → payments:intake; read → payments:read;
+  #   refund-reservations → payments:refund
+  # ===========================================================================
+
+  /v1/payments/intake:
+    post:
+      tags: [Payments]
+      operationId: intakePayment
+      summary: The ONE intake funnel for Daraja money (C2B + STK).
+      description: >
+        Requires `payments:intake`. At-least-once channel semantics (R9/C5):
+        replays are NORMAL and idempotent — a duplicate `(channel,
+        externalRef)` or `idempotencyKey` answers **200** with the EXISTING
+        payment and `duplicate: true` (the lane records a
+        `payments.duplicateCallbackObserved` tripwire), never a second
+        Payment. A duplicate carrying a DIFFERENT amount → 409
+        `DUPLICATE_AMOUNT_MISMATCH` (untrusted input, not a benign retry);
+        a duplicate in a different currency → 409 `CURRENCY_MISMATCH`.
+        Routing note: the literal `/v1/payments/intake` row wins for POST;
+        `GET /v1/payments/intake` resolves against
+        `/v1/payments/{paymentId}` and 404s (`HTTP_PAYMENT_NOT_FOUND`).
+      x-required-permission: payments:intake
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IntakeBody'}
+            example:
+              channel: c2b
+              externalRef: SBK41XQ7RT
+              idempotencyKey: daraja-c2b-SBK41XQ7RT
+              amount: {minor: 750000, currency: KES}
+              customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+              declaredRefs: [INV-2026-08-0001]
+      responses:
+        '201':
+          description: 'Payment initiated (`state: initiated`).'
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntakeResponse'}
+              example:
+                data:
+                  payment:
+                    id: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                    channel: c2b
+                    externalRef: SBK41XQ7RT
+                    idempotencyKey: daraja-c2b-SBK41XQ7RT
+                    customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                    state: initiated
+                    currency: KES
+                    requested: {minor: 750000, currency: KES}
+                    confirmed: null
+                    unapplied: {minor: 0, currency: KES}
+                    declaredRefs: [INV-2026-08-0001]
+                    allocations: []
+                    refunds: []
+                    initiatedAt: '2026-09-04T10:00:00.000Z'
+                    confirmedAt: null
+                    failedAt: null
+                    failureCode: null
+                    reversedAt: null
+                    reversalReason: null
+                  duplicate: false
+        '200':
+          description: >
+            Idempotent replay of a known callback — the EXISTING payment with
+            `duplicate: true` (R9/C5).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentIntakeResponse'}
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '409':
+          description: >
+            Tampered duplicate — same transaction id but different money:
+            `DUPLICATE_AMOUNT_MISMATCH` (amount) or `CURRENCY_MISMATCH`
+            (currency, R10).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: DUPLICATE_AMOUNT_MISMATCH
+                  message: duplicate callback for SBK41XQ7RT carries KES 7,500.01 but the payment was initiated for KES 7,500.00
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/payments/{paymentId}/confirmations:
+    post:
+      tags: [Payments]
+      operationId: confirmPayment
+      summary: The Daraja success callback (idempotent confirmation).
+      description: >
+        Requires `payments:intake`. Sets `confirmedMinor` exactly ONCE.
+        Idempotent by value: a re-confirmed success callback with the SAME
+        amount answers **200** `alreadyConfirmed: true`; a DIFFERENT amount
+        → 409 `CONFIRMED_AMOUNT_MISMATCH`. The adapter advances an
+        `initiated` payment through the lane's own `awaitConfirmation`
+        transition first, so callbacks may race ahead of the platform's
+        awaiting-confirmation step. Terminal payments refuse with 409
+        `PAYMENT_TERMINAL`; illegal states answer 409 `INVALID_TRANSITION`;
+        cross-currency amounts answer 409 `CURRENCY_MISMATCH`.
+      x-required-permission: payments:intake
+      parameters:
+        - {$ref: '#/components/parameters/PaymentId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfirmationBody'}
+            example:
+              amount: {minor: 750000, currency: KES}
+      responses:
+        '201':
+          description: 'Payment confirmed (`state: confirmed`).'
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentConfirmationResponse'}
+              example:
+                data:
+                  payment:
+                    id: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                    channel: c2b
+                    externalRef: SBK41XQ7RT
+                    idempotencyKey: daraja-c2b-SBK41XQ7RT
+                    customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                    state: confirmed
+                    currency: KES
+                    requested: {minor: 750000, currency: KES}
+                    confirmed: {minor: 750000, currency: KES}
+                    unapplied: {minor: 750000, currency: KES}
+                    declaredRefs: [INV-2026-08-0001]
+                    allocations: []
+                    refunds: []
+                    initiatedAt: '2026-09-04T10:00:00.000Z'
+                    confirmedAt: '2026-09-04T10:01:30.000Z'
+                    failedAt: null
+                    failureCode: null
+                    reversedAt: null
+                    reversalReason: null
+                  alreadyConfirmed: false
+        '200':
+          description: >
+            Replay of the same success callback — no-op, `alreadyConfirmed:
+            true` (the same amount must mean the same money).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentConfirmationResponse'}
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No payment carries the id (`HTTP_PAYMENT_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_PAYMENT_NOT_FOUND
+                  message: payment 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '409':
+          description: >
+            State conflicts — `CONFIRMED_AMOUNT_MISMATCH` (re-confirm with a
+            different amount), `PAYMENT_TERMINAL` (failed/reversed/refunded),
+            `INVALID_TRANSITION`, `CURRENCY_MISMATCH`.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CONFIRMED_AMOUNT_MISMATCH
+                  message: payment 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a already confirmed for 750000, cannot re-confirm for 800000
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/payments/{paymentId}/refund-reservations:
+    post:
+      tags: [Payments]
+      operationId: recordRefundReservation
+      summary: Reserve a refund against confirmed funds (R6 ceiling).
+      description: >
+        Requires `payments:refund`. Appends an append-only refund reservation
+        row and enforces the payment side of R6: refunds draw ONLY on funds
+        not already allocated/refunded — over-draw → 422
+        `REFUND_EXCEEDS_AVAILABLE`. Refunds on money that has not landed →
+        409 `PAYMENT_NOT_CONFIRMED`; terminal payments → 409
+        `PAYMENT_TERMINAL`; cross-currency → 409 `CURRENCY_MISMATCH`.
+      x-required-permission: payments:refund
+      parameters:
+        - {$ref: '#/components/parameters/PaymentId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefundReservationBody'}
+            example:
+              amount: {minor: 250000, currency: KES}
+              reason: duplicate deposit — refunding the overpayment
+      responses:
+        '201':
+          description: Reservation recorded; the view shows the appended refund row.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentRefundResponse'}
+              example:
+                data:
+                  payment:
+                    id: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                    channel: c2b
+                    externalRef: SBK41XQ7RT
+                    idempotencyKey: daraja-c2b-SBK41XQ7RT
+                    customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                    state: confirmed
+                    currency: KES
+                    requested: {minor: 750000, currency: KES}
+                    confirmed: {minor: 750000, currency: KES}
+                    unapplied: {minor: 500000, currency: KES}
+                    declaredRefs: [INV-2026-08-0001]
+                    allocations: []
+                    refunds:
+                      - id: 9a8b7c6d-5e4f-4321-8ab0-998877665544
+                        amount: {minor: 250000, currency: KES}
+                        reason: duplicate deposit — refunding the overpayment
+                        recordedAt: '2026-09-04T10:05:00.000Z'
+                    initiatedAt: '2026-09-04T10:00:00.000Z'
+                    confirmedAt: '2026-09-04T10:01:30.000Z'
+                    failedAt: null
+                    failureCode: null
+                    reversedAt: null
+                    reversalReason: null
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No payment carries the id (`HTTP_PAYMENT_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: >
+            Refunds draw on confirmed funds only — `PAYMENT_NOT_CONFIRMED`
+            (money not landed) or `PAYMENT_TERMINAL` / `CURRENCY_MISMATCH`.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: PAYMENT_NOT_CONFIRMED
+                  message: refunds draw on confirmed funds; payment 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a is initiated (R6)
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '422':
+          description: >
+            The R6 ceiling refused the draw — allocations + refunds would
+            exceed the confirmed amount (`REFUND_EXCEEDS_AVAILABLE`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: REFUND_EXCEEDS_AVAILABLE
+                  message: Σ allocations+refunds 1000000 would exceed confirmed 750000 (R6)
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/payments:
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      summary: List the payment read model (paginated).
+      description: >
+        Requires `payments:read`. Same pagination contract as the receivable
+        list; sort whitelist: `id`, `state`, `initiatedAt`.
+      x-required-permission: payments:read
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/PaymentSort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of payment views.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentListResponse'}
+              example:
+                data:
+                  payments:
+                    - id: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                      channel: c2b
+                      externalRef: SBK41XQ7RT
+                      idempotencyKey: daraja-c2b-SBK41XQ7RT
+                      customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                      state: confirmed
+                      currency: KES
+                      requested: {minor: 750000, currency: KES}
+                      confirmed: {minor: 750000, currency: KES}
+                      unapplied: {minor: 750000, currency: KES}
+                      declaredRefs: [INV-2026-08-0001]
+                      allocations: []
+                      refunds: []
+                      initiatedAt: '2026-09-04T10:00:00.000Z'
+                      confirmedAt: '2026-09-04T10:01:30.000Z'
+                      failedAt: null
+                      failureCode: null
+                      reversedAt: null
+                      reversalReason: null
+                meta:
+                  pagination:
+                    nextCursor: null
+                    total: 1
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+
+  /v1/payments/{paymentId}:
+    get:
+      tags: [Payments]
+      operationId: getPayment
+      summary: Fetch one payment view (fund truth).
+      description: >
+        Requires `payments:read`. `unapplied` is the lane's own derivation
+        (confirmed − allocations − refunds); `confirmed` is null until the
+        success callback lands. Unknown id → 404 `HTTP_PAYMENT_NOT_FOUND`.
+      x-required-permission: payments:read
+      parameters:
+        - {$ref: '#/components/parameters/PaymentId'}
+      responses:
+        '200':
+          description: The payment view.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentResponse'}
+              example:
+                data:
+                  payment:
+                    id: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                    channel: c2b
+                    externalRef: SBK41XQ7RT
+                    idempotencyKey: daraja-c2b-SBK41XQ7RT
+                    customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                    state: confirmed
+                    currency: KES
+                    requested: {minor: 750000, currency: KES}
+                    confirmed: {minor: 750000, currency: KES}
+                    unapplied: {minor: 750000, currency: KES}
+                    declaredRefs: [INV-2026-08-0001]
+                    allocations: []
+                    refunds: []
+                    initiatedAt: '2026-09-04T10:00:00.000Z'
+                    confirmedAt: '2026-09-04T10:01:30.000Z'
+                    failedAt: null
+                    failureCode: null
+                    reversedAt: null
+                    reversalReason: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No payment carries the id (`HTTP_PAYMENT_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_PAYMENT_NOT_FOUND
+                  message: payment 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+  # ===========================================================================
+  # /v1/collections — routes/collections.ts
+  #   act → collections:act; read → collections:read (org-scoped)
+  # ===========================================================================
+
+  /v1/collections/cases:
+    get:
+      tags: [Collections]
+      operationId: listCases
+      summary: List the org-scoped case read model (paginated).
+      description: >
+        Requires `collections:read`. ONLY the authenticated principal's org's
+        cases are visible (foreign-org rows never leak). Sort whitelist:
+        `id`, `caseNumber`, `priority`, `status`.
+      x-required-permission: collections:read
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/CaseSort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of case views.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseListResponse'}
+              example:
+                data:
+                  cases:
+                    - id: 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3
+                      caseNumber: CASE-000007
+                      sequence: 7
+                      orgId: 00000000-0000-4000-8000-000000000901
+                      receivableIds: [6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4]
+                      collectorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                      priority: high
+                      status: open
+                      derivedStatus: waiting
+                      openedAt: '2026-09-01T08:30:00.000Z'
+                      openedBy: 00000000-0000-4000-8000-000000000902
+                      closedAt: null
+                      closedBy: null
+                      actions: []
+                      history: []
+                      priorityChanges: []
+                meta:
+                  pagination:
+                    nextCursor: null
+                    total: 1
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+    post:
+      tags: [Collections]
+      operationId: openCase
+      summary: Open a collections case over one or more receivables.
+      description: >
+        Requires `collections:act`. R8 exclusivity: at most ONE open case per
+        receivable — a conflict answers 409 `CASE_ALREADY_OPEN` naming the
+        covering case. Wire-shape validation runs first (400
+        `HTTP_BODY_INVALID`, incl. the `priority` enum), then referential
+        lookups (unknown receivable → 404 `HTTP_RECEIVABLE_NOT_FOUND`),
+        then the lane's decision. The case number is the org's controlled
+        sequence (`CASE-000007`).
+      x-required-permission: collections:act
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OpenCaseBody'}
+            example:
+              receivableIds: [6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4]
+              collectorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              priority: high
+      responses:
+        '201':
+          description: Case opened.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseResponse'}
+              example:
+                data:
+                  case:
+                    id: 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3
+                    caseNumber: CASE-000007
+                    sequence: 7
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    receivableIds: [6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4]
+                    collectorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    priority: high
+                    status: open
+                    derivedStatus: waiting
+                    openedAt: '2026-09-01T08:30:00.000Z'
+                    openedBy: 00000000-0000-4000-8000-000000000902
+                    closedAt: null
+                    closedBy: null
+                    actions: []
+                    history: []
+                    priorityChanges: []
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: >
+            A covered receivable does not exist (`HTTP_RECEIVABLE_NOT_FOUND`
+            — the lane treats ids as opaque; the boundary checks referential
+            integrity).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_RECEIVABLE_NOT_FOUND
+                  message: receivable 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4 does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '409':
+          description: >
+            R8 exclusivity — one of the receivables is already covered by an
+            OPEN case (`CASE_ALREADY_OPEN`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_ALREADY_OPEN
+                  message: 'receivable 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4 is already covered by open case 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3 — close that case first (R8: at most one open case per receivable)'
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/collections/cases/{caseId}:
+    get:
+      tags: [Collections]
+      operationId: getCase
+      summary: Fetch one case (detail with sealed action/history logs).
+      description: >
+        Requires `collections:read`. A foreign-org case answers 404 —
+        existence is never leaked across orgs (`HTTP_CASE_NOT_FOUND`).
+      x-required-permission: collections:read
+      parameters:
+        - {$ref: '#/components/parameters/CaseId'}
+      responses:
+        '200':
+          description: The case view.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseResponse'}
+              example:
+                data:
+                  case:
+                    id: 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3
+                    caseNumber: CASE-000007
+                    sequence: 7
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    receivableIds: [6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4]
+                    collectorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    priority: high
+                    status: in_progress
+                    derivedStatus: waiting
+                    openedAt: '2026-09-01T08:30:00.000Z'
+                    openedBy: 00000000-0000-4000-8000-000000000902
+                    closedAt: null
+                    closedBy: null
+                    actions:
+                      - id: a1b2c3d4e5f60718293a4b5c
+                        type: call
+                        scheduledFor: '2026-09-02T09:00:00.000Z'
+                        outcome: spoke to site foreman — promised part payment
+                        completedAt: '2026-09-02T09:20:00.000Z'
+                        completedBy: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                        consentRef: null
+                        source: manual
+                        actorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                        recordedAt: '2026-09-01T09:00:00.000Z'
+                    history:
+                      - from: open
+                        to: in_progress
+                        reason: collector engaged
+                        actorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                        at: '2026-09-01T09:00:00.000Z'
+                    priorityChanges: []
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: >
+            No case with this id in the caller's org (`HTTP_CASE_NOT_FOUND`
+            — foreign-org existence is never leaked).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_CASE_NOT_FOUND
+                  message: case 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3 does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+  /v1/collections/cases/{caseId}/transitions:
+    post:
+      tags: [Collections]
+      operationId: transitionCase
+      summary: Move a case along its lifecycle (recorded decision).
+      description: >
+        Requires `collections:act`. Legal edges (`CASE_TRANSITIONS`):
+        `open → in_progress`, `in_progress → resolved | closed_inactive`;
+        terminal statuses take no edges. Every step carries a reason + actor
+        and is appended to the case's history log. Illegal target/edge → 400
+        `CASE_STATUS_INVALID` / `CASE_TRANSITION_INVALID`; blank reason →
+        400 `CASE_REASON_REQUIRED`.
+      x-required-permission: collections:act
+      parameters:
+        - {$ref: '#/components/parameters/CaseId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TransitionBody'}
+            example:
+              to: in_progress
+              reason: collector engaged
+      responses:
+        '200':
+          description: The post-transition case view.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseResponse'}
+        '400':
+          description: >
+            Unknown target status or illegal edge (`CASE_STATUS_INVALID` /
+            `CASE_TRANSITION_INVALID` / `CASE_REASON_REQUIRED`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_TRANSITION_INVALID
+                  message: cannot move a case from resolved to in_progress
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No case with this id in the caller's org (`HTTP_CASE_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/collections/cases/{caseId}/escalations:
+    post:
+      tags: [Collections]
+      operationId: escalateCase
+      summary: Bump a case's priority (strictly upward).
+      description: >
+        Requires `collections:act`. Escalation CLIMBS: the target priority
+        must rank strictly above the current one (`low < normal < high <
+        urgent`) — sidesteps and downgrades refuse with 400
+        `CASE_ESCALATION_INVALID` (deliberate de-escalation is an
+        adapter-policy decision, not a silent aggregate move). Closed cases →
+        409 `CASE_CLOSED`; every bump is appended to `priorityChanges`.
+      x-required-permission: collections:act
+      parameters:
+        - {$ref: '#/components/parameters/CaseId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EscalationBody'}
+            example:
+              to: urgent
+              reason: 60+ days overdue and site access at risk
+      responses:
+        '200':
+          description: The post-escalation case view.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseResponse'}
+        '400':
+          description: >
+            `CASE_PRIORITY_INVALID` (unknown target) or
+            `CASE_ESCALATION_INVALID` (target does not strictly raise the
+            priority) or `CASE_REASON_REQUIRED`.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_ESCALATION_INVALID
+                  message: escalation must strictly raise the priority; high → high does not
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No case with this id in the caller's org (`HTTP_CASE_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: The case is terminal — nothing to escalate (`CASE_CLOSED`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_CLOSED
+                  message: case CASE-000007 is resolved — nothing to escalate
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/collections/cases/{caseId}/actions:
+    post:
+      tags: [Collections]
+      operationId: recordCaseAction
+      summary: Append an action to the case's sealed log.
+      description: >
+        Requires `collections:act`. K2 dunning-consent gate: automated
+        OUTBOUND sends (`type: sms | whatsapp` with `source` defaulting to
+        `automated`) require `consentRef` — the compliance fact
+        `collections.dunningBlockedNoConsent` is recorded upstream and the
+        wire refuses with **403 `DUNNING_CONSENT_REQUIRED`**; nothing was
+        sent and the action is NOT appended. Closed cases refuse with 409
+        `CASE_CLOSED` (the log is sealed). Unknown action type/source → 400.
+      x-required-permission: collections:act
+      parameters:
+        - {$ref: '#/components/parameters/CaseId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RecordActionBody'}
+            example:
+              type: call
+              scheduledFor: '2026-09-02T09:00:00.000Z'
+              source: manual
+      responses:
+        '201':
+          description: Action appended; both the action and the case are returned.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseActionRecordedResponse'}
+              example:
+                data:
+                  case:
+                    id: 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3
+                    caseNumber: CASE-000007
+                    sequence: 7
+                    orgId: 00000000-0000-4000-8000-000000000901
+                    receivableIds: [6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4]
+                    collectorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    priority: high
+                    status: open
+                    derivedStatus: waiting
+                    openedAt: '2026-09-01T08:30:00.000Z'
+                    openedBy: 00000000-0000-4000-8000-000000000902
+                    closedAt: null
+                    closedBy: null
+                    actions:
+                      - id: a1b2c3d4e5f60718293a4b5c
+                        type: call
+                        scheduledFor: '2026-09-02T09:00:00.000Z'
+                        outcome: null
+                        completedAt: null
+                        completedBy: null
+                        consentRef: null
+                        source: manual
+                        actorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                        recordedAt: '2026-09-01T09:00:00.000Z'
+                    history: []
+                    priorityChanges: []
+                  action:
+                    id: a1b2c3d4e5f60718293a4b5c
+                    type: call
+                    scheduledFor: '2026-09-02T09:00:00.000Z'
+                    outcome: null
+                    completedAt: null
+                    completedBy: null
+                    consentRef: null
+                    source: manual
+                    actorId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                    recordedAt: '2026-09-01T09:00:00.000Z'
+        '400':
+          description: >
+            Shape/taxonomy refusals — `HTTP_BODY_INVALID`,
+            `CASE_ACTION_TYPE_INVALID`, `CASE_ACTION_SOURCE_INVALID`,
+            `CASE_OUTCOME_REQUIRED`, `CASE_ACTOR_REQUIRED`.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_ACTION_TYPE_INVALID
+                  message: 'unknown case action type: fax'
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403':
+          description: >
+            TWO distinct blockers live here. (1) `AUTH_ACCESS_DENIED` — the
+            principal lacks `collections:act`. (2) `DUNNING_CONSENT_REQUIRED`
+            — K2: automated outbound dunning (`sms`/`whatsapp`) without an
+            active `consentRef`; the block IS audited upstream as
+            `collections.dunningBlockedNoConsent`, nothing was sent.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: DUNNING_CONSENT_REQUIRED
+                  message: automated sms dunning on case CASE-000007 requires an active dunning consent reference (K2) — nothing was sent
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '404':
+          description: No case with this id in the caller's org (`HTTP_CASE_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: The case is terminal — its action log is sealed (`CASE_CLOSED`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_CLOSED
+                  message: case CASE-000007 is resolved — its action log is sealed
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/collections/cases/{caseId}/actions/{actionId}/completions:
+    post:
+      tags: [Collections]
+      operationId: completeCaseAction
+      summary: Complete a recorded action with its outcome.
+      description: >
+        Requires `collections:act`. Stamps `outcome`/`completedAt`/
+        `completedBy` on the action (exactly once — a re-completion refuses
+        with 409 `CASE_ACTION_ALREADY_COMPLETED`). Unknown action → 404
+        `CASE_ACTION_NOT_FOUND`. Closed cases → 409 `CASE_CLOSED`.
+      x-required-permission: collections:act
+      parameters:
+        - {$ref: '#/components/parameters/CaseId'}
+        - {$ref: '#/components/parameters/ActionId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CompleteActionBody'}
+            example:
+              outcome: spoke to site foreman — promised part payment
+      responses:
+        '200':
+          description: The post-completion case view (sealed log carries the outcome).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CaseResponse'}
+        '400':
+          description: Blank outcome (`CASE_OUTCOME_REQUIRED` via `HTTP_BODY_INVALID` shape rules).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_OUTCOME_REQUIRED
+                  message: a case action requires a non-blank outcome (blank when completing)
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: >
+            Unknown case in the caller's org (`HTTP_CASE_NOT_FOUND`) or the
+            case has no such action (`CASE_ACTION_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_ACTION_NOT_FOUND
+                  message: case CASE-000007 has no action a1b2c3d4e5f60718293a4b5c
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '409':
+          description: >
+            `CASE_ACTION_ALREADY_COMPLETED` (outcome is stamped exactly once)
+            or `CASE_CLOSED` (the log is sealed).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: CASE_ACTION_ALREADY_COMPLETED
+                  message: action a1b2c3d4e5f60718293a4b5c was already completed at 2026-09-02T09:20:00.000Z
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+
+  securitySchemes:
+    bearerSession:
+      type: http
+      scheme: bearer
+      description: >
+        An auth-lane SESSION token — in the reference composition the Bearer
+        credential IS the session id (an opaque UUID string, not a JWT).
+        Session state is enforced server-side: idle/absolute expiry and
+        revocation answer 401 with the lane's stable code
+        (`SESSION_IDLE_EXPIRED`, `SESSION_ABSOLUTE_EXPIRED`,
+        `SESSION_REVOKED`, `SESSION_ENDED`).
+      bearerFormat: opaque session UUID
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: >
+        `Authorization: ApiKey <keyId>.<secret>` — the credentials are split
+        at the FIRST dot. Keys verify through the auth lane's injected hash
+        codec (plaintext is never stored or compared); denials pass through
+        stable codes: `KEY_UNKNOWN`, `KEY_SECRET_MISMATCH`, `KEY_REVOKED`,
+        `KEY_EXPIRED`, `KEY_OWNER_INACTIVE` (all 401). Key scopes are
+        concrete permissions only — wildcards are refused at issuance.
+
+  headers:
+    XRequestId:
+      description: >
+        Correlation id — echoed from the request's `x-request-id` (or
+        `x-correlation-id`) header, else generated by the kernel's id port.
+        Present on EVERY response; error envelopes also repeat it as the
+        body-level `requestId`.
+      schema: {type: string}
+      examples:
+        generated: {value: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70}
+        echoed: {value: deploy-2026-09-04-run-42}
+
+  parameters:
+
+    Limit:
+      name: limit
+      in: query
+      description: >
+        Page size — integer 1–100, default 20. STRICT boundaries: `limit=0`,
+        `limit=101`, non-integers and negatives refuse with 400
+        `HTTP_QUERY_INVALID` (the kernel never silently clamps).
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      example: 20
+    Cursor:
+      name: cursor
+      in: query
+      description: >
+        Opaque page cursor from `meta.pagination.nextCursor` (reference
+        implementation: the offset into the deterministically ordered list;
+        a persistence adapter swaps in its own keyset cursor behind the same
+        contract). Max 512 chars.
+      schema: {type: string, maxLength: 512}
+      example: '20'
+    Order:
+      name: order
+      in: query
+      description: Sort direction (applies when `sort` is given).
+      schema: {type: string, enum: [asc, desc], default: asc}
+    ReceivableSort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, state, dueDate]}
+    PaymentSort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, state, initiatedAt]}
+    CaseSort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, caseNumber, priority, status]}
+    ReceivableId:
+      name: receivableId
+      in: path
+      required: true
+      description: The receivable id (exact string match; unknown ids answer 404).
+      schema: {type: string}
+      example: 6b8c9d0e-1f2a-4b3c-8d4e-5f60718293a4
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      description: The payment id (exact string match; unknown ids answer 404).
+      schema: {type: string}
+      example: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      description: The collections-case id (org-scoped; foreign-org ids answer 404).
+      schema: {type: string}
+      example: 4d5e6f70-8192-4a3b-8c4d-5e6f708192a3
+    ActionId:
+      name: actionId
+      in: path
+      required: true
+      description: >
+        The URL-safe opaque action id (the lane's default
+        `<caseId>/actions/<n>` embeds slashes and never travels as a path
+        parameter — the wire mints its own URL-safe ids).
+      schema: {type: string}
+      example: a1b2c3d4e5f60718293a4b5c
+
+  schemas:
+
+    # ---- envelope primitives ------------------------------------------------
+
+    Money:
+      type: object
+      description: >
+        Money in integer MINOR units (cents) — floats are banned from money
+        math (R10); money is NON-NEGATIVE (a negative Money is always a
+        modelling bug) and cross-currency arithmetic is forbidden (allocation
+        only splits, never converts).
+      required: [minor, currency]
+      properties:
+        minor:
+          type: integer
+          description: Minor units, >= 0. Requests must use a POSITIVE safe integer.
+          minimum: 0
+        currency:
+          $ref: '#/components/schemas/Currency'
+
+    PositiveMoney:
+      type: object
+      description: >
+        A request-side amount — strictly positive safe integer minor units
+        (zero/negative/float amounts refuse with 400).
+      required: [minor, currency]
+      properties:
+        minor:
+          type: integer
+          description: Positive minor units (a safe integer > 0).
+          minimum: 1
+        currency:
+          $ref: '#/components/schemas/Currency'
+    Currency:
+      type: string
+      description: The closed currency list (CURRENCIES in domain/shared/money.ts).
+      enum: [KES, USD, GBP, EUR, TZS, UGX]
+
+    PaginationMeta:
+      type: object
+      description: The list-envelope `meta` (`paginatedMeta`).
+      required: [pagination]
+      properties:
+        pagination:
+          type: object
+          required: [nextCursor]
+          properties:
+            nextCursor:
+              type: [string, 'null']
+              description: >
+                Opaque cursor for the next page, or null when the page
+                exhausts the list (reference: the offset cursor).
+            total:
+              type: integer
+              description: Total rows in the deterministic order (all three
+                mounted list routes always send it).
+
+    ErrorCode:
+      type: string
+      description: >
+        Stable SCREAMING_SNAKE_CASE transport/domain code. Known wire codes
+        (kernel table + mounted handlers): HTTP_BODY_MALFORMED,
+        HTTP_BODY_INVALID, HTTP_QUERY_INVALID, HTTP_PAYLOAD_TOO_LARGE,
+        HTTP_ROUTE_NOT_FOUND, HTTP_METHOD_NOT_ALLOWED, HTTP_UNAUTHENTICATED,
+        HTTP_USER_NOT_FOUND, HTTP_ROLE_NOT_FOUND, HTTP_SESSION_NOT_FOUND,
+        HTTP_RECEIVABLE_NOT_FOUND, HTTP_PAYMENT_NOT_FOUND,
+        HTTP_CASE_NOT_FOUND, HTTP_INTERNAL_ERROR, AUTH_ACCESS_DENIED,
+        AUTH_ESCALATION_BLOCKED, AUTH_EMAIL_MALFORMED, AUTH_EMAIL_TAKEN,
+        AUTH_USERNAME_TAKEN, AUTH_ROLE_NOT_HELD, AUTH_KEY_ID_TAKEN,
+        AUTH_KEY_PREFIX_TAKEN, AUTH_KEY_NOT_FOUND, AUTH_KEY_SCOPES_REQUIRED,
+        AUTH_SECRET_TOO_SHORT, AUTH_KEY_EXPIRY_INVALID,
+        AUTH_PERMISSION_UNKNOWN, AUTH_PERMISSION_MALFORMED,
+        AUTH_PERMISSION_WILDCARD_FORBIDDEN, AUTH_REASON_REQUIRED,
+        AUTH_ACTOR_REQUIRED, KEY_UNKNOWN, KEY_SECRET_MISMATCH, KEY_REVOKED,
+        KEY_EXPIRED, KEY_OWNER_INACTIVE, PRINCIPAL_UNKNOWN,
+        SESSION_IDLE_EXPIRED, SESSION_ABSOLUTE_EXPIRED, SESSION_REVOKED,
+        SESSION_ENDED, DUPLICATE_AMOUNT_MISMATCH, CURRENCY_MISMATCH,
+        CONFIRMED_AMOUNT_MISMATCH, PAYMENT_TERMINAL, PAYMENT_NOT_CONFIRMED,
+        INVALID_TRANSITION, REFUND_EXCEEDS_AVAILABLE, INTAKE_CHANNEL_INVALID,
+        INTAKE_EXTERNAL_REF_REQUIRED, INTAKE_IDEMPOTENCY_KEY_REQUIRED,
+        INTAKE_DECLARED_REF_BLANK, CASE_ALREADY_OPEN, CASE_CLOSED,
+        CASE_STATUS_INVALID, CASE_TRANSITION_INVALID, CASE_PRIORITY_INVALID,
+        CASE_ESCALATION_INVALID, CASE_ACTION_NOT_FOUND,
+        CASE_ACTION_ALREADY_COMPLETED, CASE_ACTION_TYPE_INVALID,
+        CASE_ACTION_SOURCE_INVALID, CASE_RECEIVABLES_REQUIRED,
+        CASE_RECEIVABLE_INVALID, CASE_RECEIVABLE_DUPLICATE,
+        CASE_REASON_REQUIRED, CASE_ACTOR_REQUIRED, CASE_OUTCOME_REQUIRED,
+        CASE_SCHEDULED_FOR_INVALID, DUNNING_CONSENT_REQUIRED.
+        Anything UNMAPPED fails closed to 500 HTTP_INTERNAL_ERROR.
+      pattern: '^[A-Z][A-Z0-9_]*$'
+
+    ErrorResponse:
+      type: object
+      description: The §38 error envelope — every failure a client can see.
+      required: [error, requestId]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              description: >
+                Human-readable detail. 403 AUTH_ACCESS_DENIED messages ARE
+                the guard's denial detail (e.g. "no active grant or scope
+                covers 'payments:read' — deny by default"). 500s are ALWAYS
+                the generic "internal server error" — internals never leak.
+        requestId:
+          type: string
+          description: The correlation id (also in the x-request-id header).
+
+    # ---- public views ---------------------------------------------------------
+
+    HealthResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [ok]
+
+    MetaResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [name, apiVersion, capabilities]
+          properties:
+            name:
+              type: string
+              example: fuatilia
+            apiVersion:
+              type: string
+              example: v1
+            capabilities:
+              type: array
+              items: {type: string}
+              description: >
+                Sorted unique third segments of every mounted /v1/<capability>
+                pattern — derived from the route table at composition.
+              example: [auth, collections, payments, receivables]
+
+    # ---- auth admin views ------------------------------------------------------
+
+    UserView:
+      type: object
+      description: Serializable user projection — no hashes, no secrets.
+      required: [id, orgId, email, username, displayName, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        orgId: {type: string, format: uuid}
+        email: {type: string, format: email}
+        username: {type: string}
+        displayName: {type: string}
+        status: {type: string, enum: [active, suspended, deactivated]}
+        createdAt: {type: string, format: date-time}
+
+    GrantView:
+      type: object
+      description: A role grant — revocation is a fact stamped on the row.
+      required: [id, orgId, userId, roleId, resourceId, grantedBy, grantedAt, revokedAt, revokedReason]
+      properties:
+        id: {type: string, format: uuid}
+        orgId: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        roleId: {type: string, format: uuid}
+        resourceId:
+          type: [string, 'null']
+          description: Resource-scoped grant target, or null for org-wide.
+        grantedBy: {type: string, format: uuid}
+        grantedAt: {type: string, format: date-time}
+        revokedAt: {type: [string, 'null'], format: date-time}
+        revokedReason: {type: [string, 'null']}
+
+    KeyView:
+      type: object
+      description: >
+        API-key projection — the visible prefix (first 8 chars) and scopes
+        ONLY: `secret` and `secretHash` are deliberately absent and never
+        leave the process.
+      required: [id, orgId, name, prefix, scopes, expiresAt, status, createdAt, lastUsedAt]
+      properties:
+        id: {type: string, format: uuid}
+        orgId: {type: string, format: uuid}
+        name: {type: string}
+        prefix:
+          type: string
+          description: First 8 chars of the secret — a visible identifier, not usable for auth.
+        scopes:
+          type: array
+          items: {$ref: '#/components/schemas/Permission'}
+        expiresAt: {type: [string, 'null'], format: date-time}
+        status: {type: string, enum: [active, revoked]}
+        createdAt: {type: string, format: date-time}
+        lastUsedAt: {type: [string, 'null'], format: date-time}
+
+    SessionView:
+      type: object
+      description: Session projection — the Bearer token IS the session id.
+      required: [id, userId, orgId, status, createdAt, lastSeenAt, endedAt, endedReason]
+      properties:
+        id: {type: string, format: uuid}
+        userId: {type: string, format: uuid}
+        orgId: {type: string, format: uuid}
+        status: {type: string, enum: [active, ended, expired, revoked]}
+        createdAt: {type: string, format: date-time}
+        lastSeenAt: {type: string, format: date-time}
+        endedAt: {type: [string, 'null'], format: date-time}
+        endedReason: {type: [string, 'null']}
+
+    Permission:
+      type: string
+      description: >
+        A CONCRETE permission from the closed vocabulary in
+        src/domain/auth/roles.ts — "<resource>:<action>". Wildcards are legal
+        ONLY inside role definitions, never per grant or key scope.
+      enum:
+        - receivables:read
+        - receivables:write
+        - payments:read
+        - payments:intake
+        - payments:refund
+        - collections:read
+        - collections:act
+        - adjustments:request
+        - adjustments:approve
+        - ledger:read
+        - ledger:post
+        - intelligence:read
+        - admin:manage-users
+        - policy:manage
+
+    # ---- request bodies (auth admin) -------------------------------------------
+
+    CreateUserBody:
+      type: object
+      required: [email, username, displayName]
+      properties:
+        email: {type: string, format: email}
+        username: {type: string, minLength: 1}
+        displayName: {type: string, minLength: 1}
+
+    GrantRoleBody:
+      type: object
+      required: [userId, roleId]
+      properties:
+        userId: {type: string, format: uuid}
+        roleId: {type: string, format: uuid}
+        resourceId:
+          type: string
+          format: uuid
+          description: Optional resource scope — omit for an org-wide grant.
+
+    RevokeRoleBody:
+      type: object
+      required: [userId, roleId, reason]
+      properties:
+        userId: {type: string, format: uuid}
+        roleId: {type: string, format: uuid}
+        reason: {type: string, minLength: 1}
+
+    IssueKeyBody:
+      type: object
+      required: [name, secret, scopes]
+      properties:
+        name: {type: string, minLength: 1}
+        secret:
+          type: string
+          minLength: 16
+          description: >
+            CALLER-SUPPLIED secret (>= 16 chars) — the response carries the
+            8-char prefix only; the raw secret is never echoed or stored.
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Permission'}
+          description: Concrete permissions only — wildcards refuse (400).
+        expiresAt:
+          type: string
+          format: date-time
+          description: Optional; must be strictly after issuance.
+
+    RevokeKeyBody:
+      type: object
+      required: [keyId, reason]
+      properties:
+        keyId: {type: string, format: uuid}
+        reason: {type: string, minLength: 1}
+
+    RevokeSessionBody:
+      type: object
+      required: [sessionId, reason]
+      properties:
+        sessionId: {type: string, format: uuid}
+        reason: {type: string, minLength: 1}
+
+    # ---- response wrappers (auth admin) -----------------------------------------
+
+    UserCreatedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [user]
+          properties:
+            user: {$ref: '#/components/schemas/UserView'}
+    GrantIssuedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [grant, alreadyHeld]
+          properties:
+            grant: {$ref: '#/components/schemas/GrantView'}
+            alreadyHeld: {type: boolean}
+    GrantRevokedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [grant]
+          properties:
+            grant: {$ref: '#/components/schemas/GrantView'}
+    KeyIssuedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [key]
+          properties:
+            key: {$ref: '#/components/schemas/KeyView'}
+    KeyRevokedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [key, alreadyRevoked]
+          properties:
+            key: {$ref: '#/components/schemas/KeyView'}
+            alreadyRevoked: {type: boolean}
+    SessionRevokedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [session]
+          properties:
+            session: {$ref: '#/components/schemas/SessionView'}
+
+    # ---- receivable views ---------------------------------------------------------
+
+    ReceivableState:
+      type: string
+      description: docs/03 receivable lifecycle.
+      enum: [draft, open, partially_paid, settled, written_off, recovered, uncollectible, voided]
+
+    AgingView:
+      type: [object, 'null']
+      description: >
+        The lane's own aging math (daysPastDue + bucket), or null for SETTLED
+        receivables (`AGING_NOT_APPLICABLE` — nothing left to age).
+      required: [daysPastDue, bucket]
+      properties:
+        daysPastDue: {type: integer, minimum: 0}
+        bucket: {type: string, enum: ['0-30', '31-60', '61-90', '90+']}
+
+    WriteOffView:
+      type: [object, 'null']
+      description: The H1 audit record — who approved the write-off, why, when.
+      required: [reason, approvedBy, writtenOffAt]
+      properties:
+        reason: {type: string}
+        approvedBy: {type: string}
+        writtenOffAt: {type: string, format: date-time}
+
+    ReceivableView:
+      type: object
+      required:
+        - id
+        - invoiceId
+        - customerId
+        - currency
+        - original
+        - applied
+        - balance
+        - state
+        - overdue
+        - openedAt
+        - dueDate
+        - settledAt
+        - voidedAt
+        - writeOff
+        - uncollectibleReason
+        - uncollectibleAt
+        - recoveredAt
+        - aging
+      properties:
+        id: {type: string}
+        invoiceId: {type: string}
+        customerId: {type: string}
+        currency: {$ref: '#/components/schemas/Currency'}
+        original: {$ref: '#/components/schemas/Money'}
+        applied: {$ref: '#/components/schemas/Money'}
+        balance:
+          $ref: '#/components/schemas/Money'
+        state: {$ref: '#/components/schemas/ReceivableState'}
+        overdue:
+          type: boolean
+          description: Stored FLAG (derivable from dueDate; cached for query speed).
+        openedAt: {type: [string, 'null'], format: date-time}
+        dueDate: {type: string, format: date-time}
+        settledAt: {type: [string, 'null'], format: date-time}
+        voidedAt: {type: [string, 'null'], format: date-time}
+        writeOff: {$ref: '#/components/schemas/WriteOffView'}
+        uncollectibleReason: {type: [string, 'null']}
+        uncollectibleAt: {type: [string, 'null'], format: date-time}
+        recoveredAt: {type: [string, 'null'], format: date-time}
+        aging: {$ref: '#/components/schemas/AgingView'}
+
+    ReceivableResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [receivable]
+          properties:
+            receivable: {$ref: '#/components/schemas/ReceivableView'}
+
+    ReceivableListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [receivables]
+          properties:
+            receivables:
+              type: array
+              items: {$ref: '#/components/schemas/ReceivableView'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
+
+    # ---- payment views -------------------------------------------------------------
+
+    PaymentChannel: {type: string, enum: [c2b, stk]}
+    PaymentState:
+      type: string
+      description: docs/05 data dictionary state enum.
+      enum:
+        - initiated
+        - pending_confirmation
+        - confirmed
+        - partially_allocated
+        - allocated
+        - unapplied
+        - failed
+        - reversed
+        - partially_refunded
+        - refunded
+
+    AllocationRowView:
+      type: object
+      required: [id, receivableId, amount, recordedAt]
+      properties:
+        id: {type: string}
+        receivableId: {type: string}
+        amount: {$ref: '#/components/schemas/Money'}
+        recordedAt: {type: string, format: date-time}
+
+    RefundRowView:
+      type: object
+      required: [id, amount, reason, recordedAt]
+      properties:
+        id: {type: string}
+        amount: {$ref: '#/components/schemas/Money'}
+        reason: {type: string}
+        recordedAt: {type: string, format: date-time}
+
+    PaymentView:
+      type: object
+      required:
+        - id
+        - channel
+        - externalRef
+        - idempotencyKey
+        - customerId
+        - state
+        - currency
+        - requested
+        - confirmed
+        - unapplied
+        - declaredRefs
+        - allocations
+        - refunds
+        - initiatedAt
+        - confirmedAt
+        - failedAt
+        - failureCode
+        - reversedAt
+        - reversalReason
+      properties:
+        id: {type: string}
+        channel: {$ref: '#/components/schemas/PaymentChannel'}
+        externalRef: {type: string}
+        idempotencyKey: {type: string}
+        customerId: {type: [string, 'null']}
+        state: {$ref: '#/components/schemas/PaymentState'}
+        currency: {$ref: '#/components/schemas/Currency'}
+        requested: {$ref: '#/components/schemas/Money'}
+        confirmed:
+          type: [object, 'null']
+          description: Set exactly ONCE by the success callback; null until then.
+          required: [minor, currency]
+          properties:
+            minor: {type: integer, minimum: 1}
+            currency: {$ref: '#/components/schemas/Currency'}
+        unapplied:
+          description: 'The lane''s own ceiling math (R2/R6): confirmed − allocations − refunds.'
+          $ref: '#/components/schemas/Money'
+        declaredRefs:
+          type: array
+          items: {type: string}
+        allocations:
+          type: array
+          items: {$ref: '#/components/schemas/AllocationRowView'}
+        refunds:
+          type: array
+          items: {$ref: '#/components/schemas/RefundRowView'}
+        initiatedAt: {type: string, format: date-time}
+        confirmedAt: {type: [string, 'null'], format: date-time}
+        failedAt: {type: [string, 'null'], format: date-time}
+        failureCode: {type: [string, 'null']}
+        reversedAt: {type: [string, 'null'], format: date-time}
+        reversalReason: {type: [string, 'null']}
+
+    PaymentIntakeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [payment, duplicate]
+          properties:
+            payment: {$ref: '#/components/schemas/PaymentView'}
+            duplicate: {type: boolean}
+
+    PaymentConfirmationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [payment, alreadyConfirmed]
+          properties:
+            payment: {$ref: '#/components/schemas/PaymentView'}
+            alreadyConfirmed: {type: boolean}
+
+    PaymentRefundResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [payment]
+          properties:
+            payment: {$ref: '#/components/schemas/PaymentView'}
+
+    PaymentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [payment]
+          properties:
+            payment: {$ref: '#/components/schemas/PaymentView'}
+
+    PaymentListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [payments]
+          properties:
+            payments:
+              type: array
+              items: {$ref: '#/components/schemas/PaymentView'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
+
+    # ---- request bodies (payments) ---------------------------------------------------
+
+    IntakeBody:
+      type: object
+      required: [channel, externalRef, idempotencyKey, amount]
+      properties:
+        channel: {$ref: '#/components/schemas/PaymentChannel'}
+        externalRef:
+          type: string
+          minLength: 1
+          description: Daraja transaction id, e.g. the C2B receipt number.
+          example: SBK41XQ7RT
+        idempotencyKey:
+          type: string
+          minLength: 1
+          description: Caller-chosen dedup key; a duplicate (channel, externalRef) OR key replays the SAME payment.
+        amount: {$ref: '#/components/schemas/PositiveMoney'}
+        customerId:
+          type: string
+          format: uuid
+          description: Optional — who the money is from (opaque cross-lane id).
+        declaredRefs:
+          type: array
+          items: {type: string, minLength: 1}
+          description: Optional invoice/reference hints; blank entries refuse.
+
+    ConfirmationBody:
+      type: object
+      required: [amount]
+      properties:
+        amount: {$ref: '#/components/schemas/PositiveMoney'}
+
+    RefundReservationBody:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount: {$ref: '#/components/schemas/PositiveMoney'}
+        reason: {type: string, minLength: 1}
+
+    # ---- collections views --------------------------------------------------------------
+
+    CaseStatus:
+      type: string
+      description: Stored lifecycle statuses.
+      enum: [open, in_progress, resolved, closed_inactive]
+    DerivedCaseStatus:
+      type: string
+      description: >
+        Stored statuses + the three DERIVED overlays (lane derive.ts,
+        computed from child facts the reference store does not hold — live
+        cases with no promise/dispute facts derive 'waiting').
+      enum: [open, in_progress, resolved, closed_inactive, waiting, promised, disputed]
+    CasePriority: {type: string, enum: [low, normal, high, urgent]}
+    CaseActionType: {type: string, enum: [call, sms, whatsapp, letter, fieldVisit, escalation]}
+    ActionSource: {type: string, enum: [automated, manual]}
+
+    CaseActionView:
+      type: object
+      required: [id, type, scheduledFor, outcome, completedAt, completedBy, consentRef, source, actorId, recordedAt]
+      properties:
+        id: {type: string}
+        type: {$ref: '#/components/schemas/CaseActionType'}
+        scheduledFor:
+          type: string
+          format: date-time
+          description: May be in the past (backfills are legal).
+        outcome: {type: [string, 'null']}
+        completedAt: {type: [string, 'null'], format: date-time}
+        completedBy: {type: [string, 'null']}
+        consentRef:
+          type: [string, 'null']
+          description: Opaque dunning consent reference; required for automated outbound sends (K2).
+        source: {$ref: '#/components/schemas/ActionSource'}
+        actorId: {type: string}
+        recordedAt: {type: string, format: date-time}
+
+    CaseTransitionRecord:
+      type: object
+      required: [from, to, reason, actorId, at]
+      properties:
+        from: {$ref: '#/components/schemas/CaseStatus'}
+        to: {$ref: '#/components/schemas/CaseStatus'}
+        reason: {type: string}
+        actorId: {type: string}
+        at: {type: string, format: date-time}
+
+    CasePriorityChangeRecord:
+      type: object
+      required: [from, to, reason, actorId, at]
+      properties:
+        from: {$ref: '#/components/schemas/CasePriority'}
+        to: {$ref: '#/components/schemas/CasePriority'}
+        reason: {type: string}
+        actorId: {type: string}
+        at: {type: string, format: date-time}
+
+    CaseView:
+      type: object
+      required:
+        - id
+        - caseNumber
+        - sequence
+        - orgId
+        - receivableIds
+        - collectorId
+        - priority
+        - status
+        - derivedStatus
+        - openedAt
+        - openedBy
+        - closedAt
+        - closedBy
+        - actions
+        - history
+        - priorityChanges
+      properties:
+        id: {type: string}
+        caseNumber:
+          type: string
+          description: Per-org controlled sequence, formatted at open.
+          example: CASE-000007
+        sequence: {type: integer, minimum: 1}
+        orgId: {type: string, format: uuid}
+        receivableIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string}
+        collectorId: {type: string}
+        priority: {$ref: '#/components/schemas/CasePriority'}
+        status: {$ref: '#/components/schemas/CaseStatus'}
+        derivedStatus: {$ref: '#/components/schemas/DerivedCaseStatus'}
+        openedAt: {type: string, format: date-time}
+        openedBy: {type: string}
+        closedAt: {type: [string, 'null'], format: date-time}
+        closedBy: {type: [string, 'null']}
+        actions:
+          type: array
+          items: {$ref: '#/components/schemas/CaseActionView'}
+        history:
+          type: array
+          items: {$ref: '#/components/schemas/CaseTransitionRecord'}
+        priorityChanges:
+          type: array
+          items: {$ref: '#/components/schemas/CasePriorityChangeRecord'}
+
+    CaseResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [case]
+          properties:
+            case: {$ref: '#/components/schemas/CaseView'}
+
+    CaseListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [cases]
+          properties:
+            cases:
+              type: array
+              items: {$ref: '#/components/schemas/CaseView'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
+
+    CaseActionRecordedResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [case, action]
+          properties:
+            case: {$ref: '#/components/schemas/CaseView'}
+            action:
+              description: The appended action, or null if the log were empty (defensive).
+              anyOf:
+                - {$ref: '#/components/schemas/CaseActionView'}
+                - type: 'null'
+
+    # ---- request bodies (collections) -----------------------------------------------
+
+    OpenCaseBody:
+      type: object
+      required: [receivableIds, collectorId]
+      properties:
+        receivableIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, format: uuid}
+          description: >
+            R8 coverage — non-empty, duplicates refuse (shape error); every
+            id must reference an existing receivable (404 otherwise).
+        collectorId: {type: string, format: uuid}
+        priority:
+          $ref: '#/components/schemas/CasePriority'
+          description: Optional; the lane defaults to 'normal'.
+
+    TransitionBody:
+      type: object
+      required: [to, reason]
+      properties:
+        to:
+          $ref: '#/components/schemas/CaseStatus'
+        reason: {type: string, minLength: 1}
+
+    EscalationBody:
+      type: object
+      required: [to, reason]
+      properties:
+        to:
+          $ref: '#/components/schemas/CasePriority'
+        reason: {type: string, minLength: 1}
+
+    RecordActionBody:
+      type: object
+      required: [type, scheduledFor]
+      properties:
+        type: {$ref: '#/components/schemas/CaseActionType'}
+        scheduledFor:
+          type: string
+          format: date-time
+        outcome:
+          type: string
+          description: Optional pre-recorded outcome (backfills).
+        source:
+          $ref: '#/components/schemas/ActionSource'
+          description: >
+            Defaults to 'automated' for outbound types (sms/whatsapp) and
+            'manual' otherwise — forgetting the flag must not bypass consent.
+        consentRef:
+          type: string
+          description: >
+            Required when an automated outbound send (K2) — without it the
+            wire refuses 403 DUNNING_CONSENT_REQUIRED and nothing is sent.
+
+    CompleteActionBody:
+      type: object
+      required: [outcome]
+      properties:
+        outcome: {type: string, minLength: 1}
+        actorId:
+          type: string
+          format: uuid
+          description: Optional completing principal override (validated UUID).
+
+  # ---- reusable error responses ---------------------------------------------
+
+  responses:
+
+    BodyInvalid:
+      description: >
+        The request body failed wire-shape validation (400). Codes:
+        `HTTP_BODY_INVALID` (wrong shape/fields), `HTTP_BODY_MALFORMED`
+        (not JSON), plus domain validation codes re-thrown by the lane
+        (e.g. `AUTH_EMAIL_MALFORMED`, `AUTH_KEY_SCOPES_REQUIRED`,
+        `AUTH_PERMISSION_UNKNOWN`, `CASE_ACTION_TYPE_INVALID`).
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: HTTP_BODY_INVALID
+              message: field 'email' must be a non-empty string
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    QueryInvalid:
+      description: >
+        Pagination/sorting refused (400 `HTTP_QUERY_INVALID`) — `limit`
+        outside 1–100, non-integer limit, cursor > 512 chars, a `sort` field
+        outside the resource whitelist, or an `order` that is not
+        asc/desc. The kernel never clamps.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: HTTP_QUERY_INVALID
+              message: query parameter 'limit' must be between 1 and 100, got 101
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    Unauthorized:
+      description: >
+        Unauthenticated (401) — no Authorization header, malformed header, or
+        the auth lane refused the credential. The stable denial code passes
+        through: `HTTP_UNAUTHENTICATED`, `KEY_UNKNOWN`,
+        `KEY_SECRET_MISMATCH`, `KEY_REVOKED`, `KEY_EXPIRED`,
+        `KEY_OWNER_INACTIVE`, `PRINCIPAL_UNKNOWN`, `SESSION_IDLE_EXPIRED`,
+        `SESSION_ABSOLUTE_EXPIRED`, `SESSION_REVOKED`, `SESSION_ENDED`.
+        EVERY denial — including "no header at all" — is audited upstream as
+        an `auth.accessDenied` fact; no credential material is ever echoed.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: HTTP_UNAUTHENTICATED
+              message: 'authentication required — supply "Authorization: Bearer <sessionToken>" or "Authorization: ApiKey <id>.<secret>"'
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    AccessDenied:
+      description: >
+        Authenticated but forbidden (403 `AUTH_ACCESS_DENIED`) —
+        `can(principal, permission)` denied the route's permission. The
+        message IS the guard's denial detail carrying the lane's DenyReason
+        (`NO_GRANT`, `NOT_IN_RESOURCE_SCOPE`, `PRINCIPAL_SUSPENDED`,
+        `PRINCIPAL_DEACTIVATED`, `PERMISSION_UNKNOWN`, …). The refusal is
+        audited upstream as `auth.accessDenied`.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: AUTH_ACCESS_DENIED
+              message: no active grant or scope covers 'admin:manage-users' — deny by default
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    EscalationBlocked:
+      description: >
+        Audited escalation refusal (403 `AUTH_ESCALATION_BLOCKED`) — the
+        granter's own concrete effective permission set does not cover every
+        permission the role would confer (a granter cannot confer authority
+        they do not hold). The refusal is audited upstream as
+        `auth.escalationBlocked` BEFORE the 403 is emitted.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: AUTH_ESCALATION_BLOCKED
+              message: grant refused — role confers permissions the granter does not hold
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    PayloadTooLarge:
+      description: >
+        Request body over the kernel's byte cap (413
+        `HTTP_PAYLOAD_TOO_LARGE`; default 1 MiB). The over-limit body is
+        never buffered.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: HTTP_PAYLOAD_TOO_LARGE
+              message: request body exceeds 1048576 bytes
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+
+    InternalError:
+      description: >
+        Fail-closed 500 `HTTP_INTERNAL_ERROR` — the message is ALWAYS the
+        generic "internal server error"; the real error went to the
+        observability sink, never to the wire. An unmapped domain code can
+        never become a misleading 4xx.
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: HTTP_INTERNAL_ERROR
+              message: internal server error
+            requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
