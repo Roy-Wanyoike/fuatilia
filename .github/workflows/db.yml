@@ -1,0 +1,42 @@
+# PostgreSQL schema CI — runs db/validate.sh --ci against a postgres service.
+# NOTE: GitHub Actions is currently blocked by the account billing lock; this workflow
+# activates automatically once billing is resolved. Until then, local green is the gate.
+name: db
+
+on:
+  push:
+    branches: [main]
+    paths: ["db/**", ".github/workflows/db.yml"]
+  pull_request:
+    paths: ["db/**", ".github/workflows/db.yml"]
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fuatilia
+          POSTGRES_PASSWORD: fuatilia
+          POSTGRES_DB: fuatilia_validate
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U fuatilia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 55432
+      PGUSER: fuatilia
+      PGPASSWORD: fuatilia
+      PGDATABASE: fuatilia_validate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: validate migrations + invariant smoke suite
+        run: bash db/validate.sh --ci
