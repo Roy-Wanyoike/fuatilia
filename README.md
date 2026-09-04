@@ -131,6 +131,14 @@ npm test            # full domain suite
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
+Wave 10 adds the production event fabric and the first deployable surfaces: the Go
+**transactional-outbox relay** (`cmd/worker` → NATS JetStream, at-least-once proven
+crash-safe against real PostgreSQL + real embedded JetStream), the **deployment
+foundation** (multi-stage distroless Dockerfiles, compose stack, environment contract
+with a static validator), and the **Next.js frontend foundation** with the Collections
+Command Center read path consuming the OpenAPI contract (75 frontend tests, production
+build green).
+
 ## Quickstart
 
 ```bash
@@ -179,6 +187,7 @@ Requires Node ≥ 22.
 | 7 | Governance & governance surfaces: maker-checker approvals, unified audit trail, USSD workflows, HTTP /v1 kernel | ✅ merged |
 | 8 | Transport completion + persistence: /v1 resource mounts (payments, collections, receivables) and the first file-backed store adapter | ✅ merged |
 | 9 | Production wave 1: production audit + roadmap, Go money/idempotency core (TS-conformance-proven), PostgreSQL financial schema (R1–R10 as DDL, 25 assertions proven on a real cluster), OpenAPI 3.1 contract for the mounted /v1 | ✅ merged |
+| 10 | Production wave 2: Go outbox relay → NATS JetStream (crash-safe, per-org ordered, DLQ + replay), Docker/compose deployment foundation, Next.js Collections Command Center on the OpenAPI contract | ✅ merged (Go /v1 API kernel #72 + PG persistence adapters #73 open) |
 
 ## Ecosystem
 

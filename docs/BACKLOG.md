@@ -221,3 +221,42 @@ persistence adapters; 11 — Next.js frontend foundation against the OpenAPI con
 (Collections Command Center). GitHub Actions remains blocked by the account billing
 lock; local gates are the documented merge gate and all three new workflows activate
 automatically once billing is resolved.
+
+## Wave 10 — Production wave 2 (merged 2026-09-04)
+
+- `prod/outbox-relay` → #74 (PR #78) — **backend-go/** `cmd/worker` + `internal/outbox`:
+  the ADR-0003 relay draining `outbox_events` into the `FUATILIA_EVENTS` JetStream
+  stream — at-least-once (publish-then-mark in one org-batch tx), per-org ordered
+  (advisory xact lock + SKIP LOCKED), Nats-Msg-Id dedup, grammar-poison + attempt-budget
+  DLQ with a replay CLI (poisons / time range). Proven against real PostgreSQL 16.4 +
+  real embedded JetStream: crash-safety via the `afterPublish` fault-injection seam,
+  double-publish-free concurrency (two relays, 60 events), 100-event ordered soak,
+  all 27 catalog names (E01–E27) pinned byte-for-byte. Envelope fidelity: payload =
+  the jsonb column's canonical text appended byte-for-byte, money never reinterpreted.
+- `prod/deploy-foundation` → #75 (PR #77) — **deploy/**: multi-stage distroless
+  `backend-go/Dockerfile` (--target api / --target worker, non-root, pinned bases),
+  `docker-compose.yml` (postgres:16 + nats:2.11 jetstream + one-shot migrate job +
+  api + worker, only api publishes a port, fail-fast secret interpolation),
+  `.env.example` (12-key contract, no default credentials), `docs/DEPLOY.md`
+  (quickstart, backup/restore, upgrade path, explicit NOT-covered ledger),
+  `scripts/validate_deploy.py` (7 static gates, mutation-proven; strict mode goes
+  green when #72's `cmd/api` lands).
+- `prod/frontend-foundation` → #76 (PR #79) — **frontend/**: Next.js 15 / React 19
+  app-router workspace (strict TS, Tailwind, TanStack Query/Table, zod,
+  react-hook-form) consuming the merged OpenAPI contract: typed /v1 client with
+  tagged refusals + strict schemas, error-code union pinned set-equal to the spec,
+  BFF proxy relaying the httpOnly session cookie, capability-aware shell, and the
+  Collections Command Center v1 — seven cards each with real loading/empty/error
+  states (dead-backend honesty: no fabricated rows anywhere). 75 frontend tests,
+  production build green.
+
+**Combined main after wave 10 (fc64a76): TS 2665/2665 / 114 suites + typecheck clean;
+Go race-green (money, idempotency, outbox); OpenAPI PASS (22 ≡ 22); deploy validator
+PASS (--allow-pending-lanes); frontend build green + 75/75.**
+
+Still open (carried to wave 11): #72 Go /v1 API kernel (pgx-based vertical slice; the
+hand-rolled wire-protocol draft was rejected — use pgxpool) and #73 PostgreSQL
+persistence adapters (binding constraint discovered mid-build: the `AuthStore`/
+`ResourceStore` seams are SYNCHRONOUS — the PG adapters need a cache-first sync facade
+with an async durable flusher, the filestore's sync-fs analog; `client.ts` +
+`schema-map.ts` drafts are complete and reviewed, `authstore.ts` needs the redesign).
