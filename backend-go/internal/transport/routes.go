@@ -195,7 +195,10 @@ func authAdminRoutes(deps Deps) []RouteRecord {
 					}
 					expires = &parsed
 				}
-				result, err := svc.IssueKey(rc.context(), principal.OrgID, principal.PrincipalID, name, secret, scopes, expires)
+				// The issuer identity is the principal's USER id: the DDL's
+				// fk_api_keys_issuer references users(org_id, id), and an apiKey
+				// principal contributes its owner — the human the key acts for.
+				result, err := svc.IssueKey(rc.context(), principal.OrgID, principal.UserID, name, secret, scopes, expires)
 				if err != nil {
 					return HandlerResult{}, err
 				}

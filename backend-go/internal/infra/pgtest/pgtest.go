@@ -165,6 +165,13 @@ func StartTemp(ctx context.Context) (cluster *Cluster, stop func(), err error) {
 		_ = os.RemoveAll(dataDir)
 		return nil, nil, err
 	}
+	// initdb provisions the fresh cluster: trust auth + the lane's
+	// superuser, exactly the boot-api-lane.sh provisioning (issue #72's
+	// committed setup script).
+	if out, initErr := run(ctx, binDir, "initdb", "-D", dataDir, "-A", "trust", "-U", superuser); initErr != nil {
+		_ = os.RemoveAll(dataDir)
+		return nil, nil, fmt.Errorf("pgtest: initdb %s: %w: %s", dataDir, initErr, out)
+	}
 	cluster = &Cluster{
 		BinDir:         binDir,
 		DataDir:        dataDir,

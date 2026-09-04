@@ -50,8 +50,9 @@ func scanReceivable(row scanner) (ReceivableRow, error) {
 	return r, nil
 }
 
-// receivableColumns is the SELECT projection shared by list and get.
-const receivableColumns = `id, org_id, invoice_id, customer_id, currency, original_minor, applied_minor,
+// receivableColumns is the SELECT projection shared by list and get (call
+// sites append the FROM clause directly, so the SELECT keyword rides here).
+const receivableColumns = `SELECT id, org_id, invoice_id, customer_id, currency, original_minor, applied_minor,
         balance_minor, state, overdue, opened_at, due_date, settled_at, voided_at,
         write_off_reason, write_off_approved_by, write_off_at, uncollectible_reason,
         uncollectible_at, recovered_at, created_at`

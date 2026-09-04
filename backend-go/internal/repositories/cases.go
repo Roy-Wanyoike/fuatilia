@@ -56,7 +56,9 @@ var CaseSort = map[string]string{
 	"status":     "status",
 }
 
-const caseColumns = `id, org_id, case_number, sequence_no, priority, status, owner_id, opened_at, closed_at, closed_reason`
+// caseColumns is the SELECT projection shared by list and get (call sites
+// append the FROM clause directly, so the SELECT keyword rides here).
+const caseColumns = `SELECT id, org_id, case_number, sequence_no, priority, status, owner_id, opened_at, closed_at, closed_reason`
 
 func scanCase(row scanner) (CaseRow, error) {
 	var c CaseRow
@@ -198,16 +200,19 @@ func (s *Stores) NextCaseActionSequence(ctx context.Context, q Querier, orgID, c
 }
 
 // AppendCaseAction appends one sealed-log row (actor required, append-only —
-// UPDATE/DELETE are rejected by trg_case_actions_guard).
-func (s *Stores) AppendCaseAction(ctx context.Context, q Querier, orgID, caseID, actorID, action string, detail map[string]any, performedAt time.Time, seq int64) error {
+// UPDATE/DELETE are rejected by trg_case_actions_guard). actionID is minted
+// by the CALLER (the injected id source) so the wire action id, the outbox
+// fact and the persisted row all name the SAME log entry — the completion
+// route resolves its target by that id.
+func (s *Stores) AppendCaseAction(ctx context.Context, q Querier, orgID, caseID, actionID, actorID, action string, detail map[string]any, performedAt time.Time, seq int64) error {
 	payload, err := json.Marshal(orEmpty(detail))
 	if err != nil {
 		return infra.NewDomainError(infra.CodeInternal, "case action detail is not serializable", nil)
 	}
 	_, err = q.Exec(ctx,
-		`INSERT INTO case_actions (org_id, case_id, actor_id, action, detail, performed_at, sequence_no)
-                 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-		orgID, caseID, actorID, action, string(payload), performedAt, seq)
+		`INSERT INTO case_actions (id, org_id, case_id, actor_id, action, detail, performed_at, sequence_no)
+                 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+		actionID, orgID, caseID, actorID, action, string(payload), performedAt, seq)
 	return err
 }
 

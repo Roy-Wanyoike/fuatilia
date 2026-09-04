@@ -158,7 +158,7 @@ func (s *Services) OpenCase(ctx context.Context, orgID, openedBy string, cmd Ope
 				return err
 			}
 		}
-		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, openedBy, repositories.LogOpened, map[string]any{
+		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, infra.NewUUID(), openedBy, repositories.LogOpened, map[string]any{
 			"actorId":  openedBy,
 			"openedAt": repositories.ISO(now),
 		}, now, 1); err != nil {
@@ -243,7 +243,7 @@ func (s *Services) Transition(ctx context.Context, orgID, caseID, actorID string
 		if err != nil {
 			return err
 		}
-		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, actorID, repositories.LogTransition, map[string]any{
+		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, infra.NewUUID(), actorID, repositories.LogTransition, map[string]any{
 			"from":    cse.Status,
 			"to":      cmd.To,
 			"reason":  trim(cmd.Reason),
@@ -346,7 +346,7 @@ func (s *Services) Escalate(ctx context.Context, orgID, caseID, actorID string, 
 		if err != nil {
 			return err
 		}
-		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, actorID, repositories.LogEscalation, map[string]any{
+		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, infra.NewUUID(), actorID, repositories.LogEscalation, map[string]any{
 			"from":    cse.Priority,
 			"to":      cmd.To,
 			"reason":  trim(cmd.Reason),
@@ -442,6 +442,11 @@ func (s *Services) RecordAction(ctx context.Context, orgID, caseID, actorID stri
 	}
 	consentRef := trim(cmd.ConsentRef)
 	var result RecordActionResult
+	// consentRefusal is captured INSIDE the transaction and returned only
+	// AFTER it commits: the K2 compliance fact is a real fact (the sealed-log
+	// hold marker + the outbox event survive the refusal), unlike a failed
+	// command whose partial state must roll back.
+	var consentRefusal *infra.DomainError
 	err := s.Stores.RunInTx(ctx, func(tx pgx.Tx) error {
 		cse, err := s.Stores.CaseByID(ctx, tx, orgID, caseID)
 		if err != nil {
@@ -465,7 +470,7 @@ func (s *Services) RecordAction(ctx context.Context, orgID, caseID, actorID stri
 			if seqErr != nil {
 				return seqErr
 			}
-			if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, actorID, repositories.LogDunningHold, map[string]any{
+			if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, infra.NewUUID(), actorID, repositories.LogDunningHold, map[string]any{
 				"actionType":   cmd.Type,
 				"scheduledFor": repositories.ISO(cmd.ScheduledFor),
 				"reason": "automated " + cmd.Type + " dunning on case " + cse.CaseNumber +
@@ -491,15 +496,16 @@ func (s *Services) RecordAction(ctx context.Context, orgID, caseID, actorID stri
 			}); err != nil {
 				return err
 			}
-			return infra.NewDomainError(CodeDunningConsentRequired,
+			consentRefusal = infra.NewDomainError(CodeDunningConsentRequired,
 				"automated "+cmd.Type+" dunning on case "+cse.CaseNumber+" requires an active dunning consent reference (K2) — nothing was sent",
 				map[string]any{"caseId": cse.ID, "actionType": cmd.Type, "source": source})
+			return nil
 		}
 		seq, err := s.Stores.NextCaseActionSequence(ctx, tx, orgID, cse.ID)
 		if err != nil {
 			return err
 		}
-		actionID := infra.NewUUID()
+		actionID := s.IDs()
 		detail := map[string]any{
 			"type":         cmd.Type,
 			"scheduledFor": repositories.ISO(cmd.ScheduledFor),
@@ -514,7 +520,7 @@ func (s *Services) RecordAction(ctx context.Context, orgID, caseID, actorID stri
 			detail["completedAt"] = repositories.ISO(now)
 			detail["completedBy"] = actorID
 		}
-		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, actorID, cmd.Type, detail, now, seq); err != nil {
+		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, actionID, actorID, cmd.Type, detail, now, seq); err != nil {
 			return err
 		}
 		recordedPayload := map[string]any{
@@ -558,6 +564,9 @@ func (s *Services) RecordAction(ctx context.Context, orgID, caseID, actorID stri
 		}
 		return nil
 	})
+	if consentRefusal != nil {
+		return RecordActionResult{}, consentRefusal
+	}
 	if err != nil {
 		return RecordActionResult{}, err
 	}
@@ -622,7 +631,7 @@ func (s *Services) CompleteAction(ctx context.Context, orgID, caseID, actionID, 
 		if trim(actorID) != "" {
 			completedBy = trim(actorID)
 		}
-		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, completedBy, repositories.LogCompletion, map[string]any{
+		if err := s.Stores.AppendCaseAction(ctx, tx, orgID, cse.ID, infra.NewUUID(), completedBy, repositories.LogCompletion, map[string]any{
 			"actionId":    actionID,
 			"outcome":     trim(outcome),
 			"completedAt": repositories.ISO(now),

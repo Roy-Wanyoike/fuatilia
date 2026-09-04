@@ -115,10 +115,20 @@ func appendAuditTx(ctx context.Context, tx pgx.Tx, e AuditEvent) error {
 		`INSERT INTO audit_events
                         (org_id, actor_type, actor_id, action, resource, resource_id, payload, reason, seq, prev_hash, hash, occurred_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12)`,
-		nullableText(e.OrgID), e.ActorType, nullableText(e.ActorID), e.Action, e.Resource,
+		nullableText(e.OrgID), e.ActorType, actorIDText(e.ActorID), e.Action, e.Resource,
 		nullableText(e.ResourceID), payloadJSON, nullableText(e.Reason),
 		seq, prevHash, hash, e.OccurredAt)
 	return err
+}
+
+// actorIDText keeps the schema's NOT NULL on audit_events.actor_id: a denial
+// that precedes identity records the "unknown" actor (the structured payload
+// still carries principalId: null — the column is the non-null floor).
+func actorIDText(actorID string) string {
+	if actorID == "" {
+		return "unknown"
+	}
+	return actorID
 }
 
 // AuditChainHash computes the tamper-evident chain hash over

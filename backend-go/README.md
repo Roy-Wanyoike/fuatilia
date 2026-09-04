@@ -11,7 +11,26 @@ Positioning and rationale: `docs/DECISIONS.md` ADR-0001, `docs/PRODUCT_ROADMAP.m
 
 ```
 backend-go/
-├── go.mod                  # module github.com/Roy-Wanyoike/fuatilia/backend-go (Go 1.23)
+├── go.mod                  # module github.com/Roy-Wanyoike/fuatilia/backend-go
+├── cmd/
+│   ├── api/main.go         # the /v1 API kernel binary — serves the 22-op mounted surface
+│   │                       #   over PostgreSQL (issue #72). Config: DATABASE_URL (required),
+│   │                       #   LISTEN_ADDR (default :8080). slog with requestId; secrets never logged.
+│   └── worker/main.go      # the outbox relay binary (issue #74) — publishes committed
+│                           #   outbox_events to NATS JetStream
+├── internal/
+│   ├── transport/          # stdlib net/http kernel: envelopes, error codes, cursor pagination,
+│   │                       #   OpenAPI parity test (22 ops locked against api/openapi/fuatilia.v1.yaml)
+│   ├── application/        # command services: payments intake (R9 funnel + ledger posting),
+│   │                       #   receivables, collections (R8 exclusivity + per-org case sequence),
+│   │                       #   auth admin; every fact appended to the outbox in the SAME tx
+│   ├── repositories/       # pgx-backed stores over db/migrations 0001–0014, org_id on every row
+│   ├── auth/               # session + ApiKey verification (bearer token IS the session id;
+│   │                       #   `Authorization: ApiKey <id>.<secret>` split at the first dot),
+│   │                       #   permission guard, fail-closed audited denials
+│   ├── infra/              # config from env, pgx pool, envelope-v1 outbox append, slog, pgtest
+│   └── outbox/             # the relay (issue #74): outbox_events → NATS JetStream with
+│                           #   dedup, poison handling, replay
 └── pkg/
     ├── money/              # exact money primitive — the port of src/domain/shared/money.ts
     │   ├── money.go        #   int64 minor units, closed ISO 4217 set, overflow-checked math
@@ -51,18 +70,42 @@ package doc comment, including the two caller obligations (no reentrant calls; k
 ## Verification
 
 ```sh
-export PATH="$HOME/tools/go/bin:$PATH"   # local toolchain (CI uses setup-go 1.23)
 gofmt -l .        # must print nothing
 go vet ./...
 go test ./... -race
 ```
 
-CI (`.github/workflows/go.yml`) runs the same three gates on every push/PR; it activates
+### Integration tests boot REAL PostgreSQL (no stubs, no silent skips)
+
+The transport, auth, infra and outbox suites run against a real PostgreSQL 16 with
+`db/migrations/0001–0014` applied. An unreachable PG **fails** the run — it is never
+silently skipped (financial guarantees can only be evidenced against the real store).
+
+**Per-lane databases are load-bearing:** `go test ./...` runs packages in parallel, and
+parallel `TRUNCATE ... CASCADE` on one shared database deadlocks. Each lane therefore
+targets its own database via `FUATILIA_TEST_DATABASE_URL` (default
+`postgres://postgres@127.0.0.1:5435/fuatilia_test`):
+
+```sh
+# boot a cluster once (any PG 16), then:
+#   lane DB fuatilia_test        ← internal/outbox (relay)
+#   lane DB fuatilia_api_test    ← transport + auth + infra + application (API kernel)
+node db/migrate.cjs --user postgres --db fuatilia_api_test   # apply migrations per lane DB
+
+export PATH="$HOME/tools/go/bin:$PATH"
+FUATILIA_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5435/fuatilia_test \
+  go test -race ./internal/outbox/
+FUATILIA_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5435/fuatilia_api_test \
+  go test -race $(go list ./... | grep -v internal/outbox)
+```
+
+CI (`.github/workflows/go.yml`) runs the same gates on every push/PR; it activates
 once the GitHub account billing lock is resolved — until then local green is the merge gate
 (see `docs/ENGINEERING_STATUS.md`).
 
 ## What this module deliberately does NOT contain yet
 
-No `cmd/`, no HTTP transport, no storage: later waves mount the `/v1` API over these
-primitives (roadmap P0 → P1 in `docs/PRODUCT_ROADMAP.md`). New packages must keep zero
-third-party dependencies and the parity contract against the TS specification.
+No broker publishing from the request path (the transactional outbox plus the relay is the
+publish path — ADR-0003), no Temporal workflows, no Daraja HTTP client: later waves add
+them (roadmap P1 in `docs/PRODUCT_ROADMAP.md`). The TS code in `src/` remains the
+behavioral specification: every Go handler cites and mirrors its lane.

@@ -152,9 +152,15 @@ type PermissionRule struct {
 type Principal struct {
 	Kind        string // "user" | "apiKey"
 	PrincipalID string
-	OrgID       string
-	Status      string // active | suspended | deactivated | revoked
-	Rules       []PermissionRule
+	// UserID is the human user behind the principal: the principal id itself
+	// for a user session, the key's OWNER user for an api key (the owner's
+	// status cascades to the key, so the key acts on the owner's user
+	// identity — the identity the schema's user-referencing issuer columns
+	// demand).
+	UserID string
+	OrgID  string
+	Status string // active | suspended | deactivated | revoked
+	Rules  []PermissionRule
 }
 
 // CanDecision is the deterministic decision value: either allowed with

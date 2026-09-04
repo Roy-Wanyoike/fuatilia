@@ -106,10 +106,13 @@ func ISOPtr(t *time.Time) *string {
 	return &s
 }
 
-// scanErr wraps a row-scan failure with the query context.
+// scanErr wraps a row-scan failure with the query context; "no rows"
+// becomes ErrNotFound (with pgx.ErrNoRows preserved in the chain) so the
+// application layer's errors.Is checks hold regardless of which lookup
+// raised it.
 func scanErr(what string, err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return fmt.Errorf("repositories: %s: %w", what, fmt.Errorf("%w (%w)", ErrNotFound, pgx.ErrNoRows))
 	}
 	return fmt.Errorf("repositories: %s: %w", what, err)
 }

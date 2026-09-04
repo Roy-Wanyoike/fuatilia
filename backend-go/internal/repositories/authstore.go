@@ -126,6 +126,7 @@ func (s *AuthStore) SessionPrincipal(ctx context.Context, token string) auth.Out
 		Principal: auth.Principal{
 			Kind:        "user",
 			PrincipalID: user.ID,
+			UserID:      user.ID,
 			OrgID:       user.OrgID,
 			Status:      user.Status,
 			Rules:       rules,
@@ -176,6 +177,7 @@ func (s *AuthStore) APIKeyPrincipal(ctx context.Context, id, secret string) auth
 		Principal: auth.Principal{
 			Kind:        "apiKey",
 			PrincipalID: key.ID,
+			UserID:      owner.ID,
 			OrgID:       key.OrgID,
 			Status:      "active",
 			Rules:       rules,

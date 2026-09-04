@@ -50,8 +50,10 @@ type RefundRow struct {
 	CreatedAt time.Time
 }
 
-// paymentColumns is the SELECT projection shared by every payment lookup.
-const paymentColumns = `id, org_id, customer_id, channel, external_ref, idempotency_key, state,
+// paymentColumns is the SELECT projection shared by every payment lookup
+// (call sites append the FROM clause directly, so the SELECT keyword rides
+// here).
+const paymentColumns = `SELECT id, org_id, customer_id, channel, external_ref, idempotency_key, state,
         currency, requested_minor, confirmed_minor, unapplied_minor, declared_refs,
         initiated_at, confirmed_at, failed_at, failure_code, reversed_at, reversal_reason`
 
