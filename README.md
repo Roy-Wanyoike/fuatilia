@@ -3,7 +3,10 @@
 <img src="docs/assets/readme/hero.png" alt="Fuatilia — receivables intelligence & collections infrastructure for African businesses" width="100%"/>
 
 [![CI](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml/badge.svg)](https://github.com/Roy-Wanyoike/fuatilia/actions/workflows/ci.yml)
-![tests](https://img.shields.io/badge/domain%20tests-2%2C174%20passing-2fbf8f)
+![tests](https://img.shields.io/badge/domain%20tests-2%2C665%20passing-2fbf8f)
+![go](https://img.shields.io/badge/go%20core-tests%20race%20clean-00ADD8)
+![postgres](https://img.shields.io/badge/postgres%20schema-invariants%20proven-336791)
+![api](https://img.shields.io/badge/OpenAPI-3.1%20contract-6BA539)
 ![typescript](https://img.shields.io/badge/TypeScript-strict-2d7ab3)
 ![node](https://img.shields.io/badge/node-%E2%89%A522-5b8db8)
 [![License: MIT](https://img.shields.io/badge/license-MIT-c2913d)](LICENSE)
@@ -124,7 +127,7 @@ npm run typecheck   # strict TypeScript
 npm test            # full domain suite
 ```
 
-**2,665 tests across 114 suites**, all green on Node 24 before any merge.
+**2,665 tests across 114 suites**, all green on Node 24 before any merge — plus the Go production core (`backend-go`, race-clean, TS-conformance-tested) and the PostgreSQL financial schema (`db/`, every R1–R10 invariant proven to fire on a real cluster via `bash db/validate.sh`).
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
@@ -175,6 +178,7 @@ Requires Node ≥ 22.
 | 6 | Platform services: auth & RBAC, webhook developer platform, cross-border corridors & quotes | ✅ merged |
 | 7 | Governance & governance surfaces: maker-checker approvals, unified audit trail, USSD workflows, HTTP /v1 kernel | ✅ merged |
 | 8 | Transport completion + persistence: /v1 resource mounts (payments, collections, receivables) and the first file-backed store adapter | ✅ merged |
+| 9 | Production wave 1: production audit + roadmap, Go money/idempotency core (TS-conformance-proven), PostgreSQL financial schema (R1–R10 as DDL, 25 assertions proven on a real cluster), OpenAPI 3.1 contract for the mounted /v1 | ✅ merged |
 
 ## Ecosystem
 

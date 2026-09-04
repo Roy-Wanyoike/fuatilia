@@ -184,3 +184,40 @@ All 32 backlog features (F1–F32) are merged. The domain core, governance, tran
 first persistence adapter are complete; next natural steps are the remaining /v1 resource
 mounts (auth sessions admin surface aside: ledger, adjustments, communications) and a
 persistence adapter per resource store as the platform hardens toward deployment.
+
+## Wave-9 dispatch — PRODUCTION WAVE 1 (2026-09-04)
+
+The domain backlog being complete is not product completion. Wave 9 started the platform
+transformation with four file-disjoint production lanes, each with its own GitHub issue
+(#64–#67) and PR (#68/#70/#69/#71), merged into main as `aa98bbe`/`35adfa8`/`5005eed`/`74d54ae`:
+
+- `prod/audit-roadmap` → #64 (PR #68) — **docs/** `PRODUCTION_AUDIT.md` (code-verified
+  classification of every capability with file-path evidence), `PRODUCT_ROADMAP.md`
+  (P0–P5 with dependency graph; TS domain = behavioral spec, Go = production port),
+  `ENGINEERING_STATUS.md` (honest status board; documents the account-billing CI lock
+  and the local-green merge gate), `DECISIONS.md` (ADR-0001..0005).
+- `prod/go-money-core` → #65 (PR #70) — **backend-go/**: `pkg/money` (int64 minor units,
+  overflow-checked math, exact largest-remainder allocation where parts sum to the
+  original — R1/R2, single-rounding-point banker's rounding) + `pkg/idempotency`
+  (R9/C5 first-write-wins registry). Zero third-party deps. The conformance suite
+  ports TS scenarios with identical inputs/expected outputs (money.spec 8/8,
+  allocation R1/R2 rows 13/15, strategies pro-rata 8/8) — the TS domain is the
+  behavioral specification, the Go port must prove parity. `go.yml` CI included.
+- `prod/pg-schema` → #66 (PR #71) — **db/**: 14 forward-only migrations (~30 tables)
+  with R1–R10/§37/K5 encoded AS DDL (append-only triggers, deferrable COMMIT proofs,
+  composite org-scoped FKs, R8 partial-unique via denormalized marker), plus a real
+  validation harness (`validate.sh`: throwaway PostgreSQL 16 cluster → migrate ×2 →
+  25 invariant smoke assertions, ALL GATES GREEN) and `docs/DATA_MODEL.md`.
+  `db.yml` CI (postgres:16 service) included.
+- `prod/openapi-contract` → #67 (PR #69) — **api/openapi/fuatilia.v1.yaml** (OpenAPI 3.1,
+  22 operations ≡ 22 mounted route rows, envelope/error/pagination components,
+  x-required-permission cross-checked against the roles vocabulary) +
+  `scripts/validate_openapi.py` (validator + consistency gate) + `docs/API_STATUS.md`.
+
+**Combined main after wave 9 (74d54ae): 2665/2665 TS tests / 114 suites, typecheck clean;
+Go gofmt/vet clean + tests race-green; db validate ALL GATES GREEN (25/25); OpenAPI PASS.**
+Next natural waves: 10 — Go /v1 API kernel over `backend-go` + per-store PostgreSQL
+persistence adapters; 11 — Next.js frontend foundation against the OpenAPI contract
+(Collections Command Center). GitHub Actions remains blocked by the account billing
+lock; local gates are the documented merge gate and all three new workflows activate
+automatically once billing is resolved.
