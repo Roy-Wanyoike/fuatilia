@@ -39,6 +39,10 @@ export const HTTP_ROUTE_DUPLICATE = 'HTTP_ROUTE_DUPLICATE'; // registration-time
 export const HTTP_USER_NOT_FOUND = 'HTTP_USER_NOT_FOUND'; // 404 — route-level lookup
 export const HTTP_ROLE_NOT_FOUND = 'HTTP_ROLE_NOT_FOUND'; // 404 — route-level lookup
 export const HTTP_SESSION_NOT_FOUND = 'HTTP_SESSION_NOT_FOUND'; // 404 — route-level lookup
+// Issue #60 route-level lookups over the mounted resource tables:
+export const HTTP_RECEIVABLE_NOT_FOUND = 'HTTP_RECEIVABLE_NOT_FOUND'; // 404
+export const HTTP_PAYMENT_NOT_FOUND = 'HTTP_PAYMENT_NOT_FOUND'; // 404
+export const HTTP_CASE_NOT_FOUND = 'HTTP_CASE_NOT_FOUND'; // 404
 export const HTTP_INTERNAL_ERROR = 'HTTP_INTERNAL_ERROR'; // 500 — generic, never leaks
 
 /** The kernel transport codes with their pinned statuses (table-tested). */
@@ -55,6 +59,9 @@ export const KERNEL_STATUS: Readonly<Record<string, number>> = {
   [HTTP_USER_NOT_FOUND]: 404,
   [HTTP_ROLE_NOT_FOUND]: 404,
   [HTTP_SESSION_NOT_FOUND]: 404,
+  [HTTP_RECEIVABLE_NOT_FOUND]: 404,
+  [HTTP_PAYMENT_NOT_FOUND]: 404,
+  [HTTP_CASE_NOT_FOUND]: 404,
   [HTTP_INTERNAL_ERROR]: 500,
 };
 
@@ -77,6 +84,17 @@ const EXACT_STATUS: Readonly<Record<string, number>> = {
   KEY_OWNER_INACTIVE: 401,
   // Validation special case: a wildcard where only concrete permissions are legal.
   AUTH_PERMISSION_WILDCARD_FORBIDDEN: 400,
+  // Issue #60 resource-route refusals — lane state-machine decisions whose
+  // stable codes carry no *_NOT_/_INVALID/_MISMATCH suffix the suffix table
+  // would catch (unmapped they would fail closed to 500):
+  PAYMENT_TERMINAL: 409, // failed/reversed/refunded are terminal (docs/03)
+  PAYMENT_NOT_CONFIRMED: 409, // refunds/matching draw on confirmed funds only
+  INVALID_TRANSITION: 409, // lane transition table violation (payment family)
+  REFUND_EXCEEDS_AVAILABLE: 422, // R6 ceiling — over-draw refused (the code ends _AVAILABLE, not _EXCEEDED)
+  CASE_ALREADY_OPEN: 409, // R8 exclusivity — the receivable is covered
+  CASE_CLOSED: 409, // the case is terminal; its log is sealed
+  CASE_ACTION_ALREADY_COMPLETED: 409, // the entry already carries an outcome
+  DUNNING_CONSENT_REQUIRED: 403, // K2 blocker (aligns *_NO_CONSENT → 403)
 };
 
 /** PREFIX rules — whole code families with one meaning. */
