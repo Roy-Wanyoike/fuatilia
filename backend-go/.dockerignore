@@ -1,0 +1,14 @@
+# .dockerignore — allowlist: the build context carries ONLY what
+# `go build ./cmd/api|./cmd/worker` needs (module files + Go source).
+# Everything else (docs, tests, editor droppings) never leaves the machine.
+*
+!go.mod
+!go.sum
+!cmd
+!cmd/**
+!pkg
+!pkg/**
+!internal
+!internal/**
+# Test files build nothing the image needs — keep them out of the context.
+**/*_test.go
