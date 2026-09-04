@@ -1,0 +1,93 @@
+/**
+ * Stable SCREAMING_SNAKE_CASE error codes, transcribed verbatim from
+ * api/openapi/fuatilia.v1.yaml → components.schemas.ErrorCode (description,
+ * lines 1767–1799). That block lists every code the kernel and the mounted
+ * handlers can put on the wire; anything unmapped fails CLOSED to 500
+ * HTTP_INTERNAL_ERROR, so this union is exhaustive for well-behaved servers.
+ *
+ * `contract.test.ts` asserts SET EQUALITY between this union and the codes
+ * extracted from the committed spec text, so the two cannot drift apart.
+ */
+export const KNOWN_ERROR_CODES = [
+  // Kernel transport/validation family.
+  'HTTP_BODY_MALFORMED',
+  'HTTP_BODY_INVALID',
+  'HTTP_QUERY_INVALID',
+  'HTTP_PAYLOAD_TOO_LARGE',
+  'HTTP_ROUTE_NOT_FOUND',
+  'HTTP_METHOD_NOT_ALLOWED',
+  'HTTP_UNAUTHENTICATED',
+  'HTTP_USER_NOT_FOUND',
+  'HTTP_ROLE_NOT_FOUND',
+  'HTTP_SESSION_NOT_FOUND',
+  'HTTP_RECEIVABLE_NOT_FOUND',
+  'HTTP_PAYMENT_NOT_FOUND',
+  'HTTP_CASE_NOT_FOUND',
+  'HTTP_INTERNAL_ERROR',
+  // Auth lane — administration + authorization.
+  'AUTH_ACCESS_DENIED',
+  'AUTH_ESCALATION_BLOCKED',
+  'AUTH_EMAIL_MALFORMED',
+  'AUTH_EMAIL_TAKEN',
+  'AUTH_USERNAME_TAKEN',
+  'AUTH_ROLE_NOT_HELD',
+  'AUTH_KEY_ID_TAKEN',
+  'AUTH_KEY_PREFIX_TAKEN',
+  'AUTH_KEY_NOT_FOUND',
+  'AUTH_KEY_SCOPES_REQUIRED',
+  'AUTH_SECRET_TOO_SHORT',
+  'AUTH_KEY_EXPIRY_INVALID',
+  'AUTH_PERMISSION_UNKNOWN',
+  'AUTH_PERMISSION_MALFORMED',
+  'AUTH_PERMISSION_WILDCARD_FORBIDDEN',
+  'AUTH_REASON_REQUIRED',
+  'AUTH_ACTOR_REQUIRED',
+  // Auth lane — credential denials (pass through as 401).
+  'KEY_UNKNOWN',
+  'KEY_SECRET_MISMATCH',
+  'KEY_REVOKED',
+  'KEY_EXPIRED',
+  'KEY_OWNER_INACTIVE',
+  'PRINCIPAL_UNKNOWN',
+  'SESSION_IDLE_EXPIRED',
+  'SESSION_ABSOLUTE_EXPIRED',
+  'SESSION_REVOKED',
+  'SESSION_ENDED',
+  // Payments lane.
+  'DUPLICATE_AMOUNT_MISMATCH',
+  'CURRENCY_MISMATCH',
+  'CONFIRMED_AMOUNT_MISMATCH',
+  'PAYMENT_TERMINAL',
+  'PAYMENT_NOT_CONFIRMED',
+  'INVALID_TRANSITION',
+  'REFUND_EXCEEDS_AVAILABLE',
+  'INTAKE_CHANNEL_INVALID',
+  'INTAKE_EXTERNAL_REF_REQUIRED',
+  'INTAKE_IDEMPOTENCY_KEY_REQUIRED',
+  'INTAKE_DECLARED_REF_BLANK',
+  // Collections lane.
+  'CASE_ALREADY_OPEN',
+  'CASE_CLOSED',
+  'CASE_STATUS_INVALID',
+  'CASE_TRANSITION_INVALID',
+  'CASE_PRIORITY_INVALID',
+  'CASE_ESCALATION_INVALID',
+  'CASE_ACTION_NOT_FOUND',
+  'CASE_ACTION_ALREADY_COMPLETED',
+  'CASE_ACTION_TYPE_INVALID',
+  'CASE_ACTION_SOURCE_INVALID',
+  'CASE_RECEIVABLES_REQUIRED',
+  'CASE_RECEIVABLE_INVALID',
+  'CASE_RECEIVABLE_DUPLICATE',
+  'CASE_REASON_REQUIRED',
+  'CASE_ACTOR_REQUIRED',
+  'CASE_OUTCOME_REQUIRED',
+  'CASE_SCHEDULED_FOR_INVALID',
+  'DUNNING_CONSENT_REQUIRED',
+] as const;
+
+export type ErrorCode = (typeof KNOWN_ERROR_CODES)[number];
+
+export function isKnownErrorCode(code: string): code is ErrorCode {
+  return (KNOWN_ERROR_CODES as readonly string[]).includes(code);
+}
