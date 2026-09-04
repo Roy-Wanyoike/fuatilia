@@ -36,6 +36,8 @@ Update `Status` as work lands; PRs must reference the issue so it auto-closes.
 | F28 | Unified append-only audit trail — redaction + hash chain (SPEC §37) | 7 | #53 | **done** (PR #57) | Every §37 field representable; append-only at the type level; tamper detection; AI actions auditable |
 | F29 | USSD session workflows for low-tech channels (SPEC §31) | 7 | #54 | **done** (PR #58) | Five flows over injected ports; screen budget enforced; i18n keys never copy; no fund-truth writes |
 | F30 | HTTP transport kernel — /v1 router, auth middleware, error mapping (SPEC §38) | 7 | #55 | **done** (PR #59) | Zero new deps; consistent envelope + pagination; 401/403 semantics; every denial audited |
+| F31 | Mount receivables/payments/collections resources on the /v1 kernel route table | 8 | #60 | **done** (PR #62) | Wire→lane adapters only; vocabulary permission per row; shape→lookup→decision ordering; R8/K2 refusals status-mapped; org-scoped 404s |
+| F32 | File-backed AuthStore persistence adapter — JSONL journal, crash-atomic snapshots, replay-on-boot | 8 | #61 | **done** (PR #63) | Zero new deps; quarantine-not-throw replay; snapshot tmp+rename; sequence continuity across restarts; no plaintext at rest |
 
 **Dispatch rule:** a feature enters *in-progress* only when an agent owns its module lane
 (no cross-module imports); wave N+1 starts after its dependencies merged to `main`.
@@ -160,3 +162,25 @@ SESSION_* error-family mapping) before opening and merging each PR.
 All 30 backlog features (F1–F30) are merged. The domain core, governance layer and the
 first transport surface are complete; further waves mount more /v1 resources on the
 kernel's route table without touching kernel files.
+
+## Wave-8 dispatch — transport completion + first persistence adapter (2026-09-04)
+
+The kernel's route table gained its first resource mounts and the documented store seam
+gained its first real adapter. Two file-disjoint lanes:
+
+- `feat/route-mounts` → #60 (F31) — lane `src/adapters/http/` (server.ts append-only) — **merged as PR #62**
+- `feat/persistence` → #61 (F32) — lane `src/adapters/persistence/` — **merged as PR #63**
+
+**Wave-8 dispatch — COMPLETE (merged 2026-09-04):** PR #62 resource route mounts (+87 tests),
+PR #63 file-backed auth persistence (+47). The subagent infra outage persisted (context
+deadline exceeded on both dispatches); the dispatcher completed both lanes from the drafted
+work, fixing draft defects before merging: shape-validation-before-lookup ordering in the
+open handler, URL-safe opaque action ids (the lane's `<caseId>/actions/<n>` default embeds
+slashes and cannot travel as a path parameter), wire-level priority enum validation, and
+the four missing persistence spec files (journal/replay/filestore/seam).
+
+**Combined main after wave 8: 2665/2665 tests across 114 suites, typecheck clean (Node 24.19).**
+All 32 backlog features (F1–F32) are merged. The domain core, governance, transport and the
+first persistence adapter are complete; next natural steps are the remaining /v1 resource
+mounts (auth sessions admin surface aside: ledger, adjustments, communications) and a
+persistence adapter per resource store as the platform hardens toward deployment.

@@ -93,6 +93,8 @@ move money.
 | | `audit` | Unified append-only audit trail — redaction, hash-chain integrity, event projection |
 | | `ussd` | USSD session state machine + five low-tech flows over read-only capability ports |
 | **Transport** | `adapters/http` | Zero-dep /v1 kernel — router, §38 error mapping, pagination, auth middleware (401/403, audited denials) |
+| | `adapters/http/routes` | /v1 resource mounts — payments intake/refund lifecycle, collections cases (R8 exclusivity, K2 consent), receivables aging |
+| | `adapters/persistence` | File-backed AuthStore — append-only JSONL journal, crash-atomic snapshots, quarantine-tolerant replay-on-boot |
 
 ## Engineering that matters
 
@@ -122,7 +124,7 @@ npm run typecheck   # strict TypeScript
 npm test            # full domain suite
 ```
 
-**2,531 tests across 106 suites**, all green on Node 24 before any merge.
+**2,665 tests across 114 suites**, all green on Node 24 before any merge.
 Domain tests are pure — the whole suite runs in seconds with no mocks of infrastructure,
 because there is no infrastructure to mock.
 
@@ -172,6 +174,7 @@ Requires Node ≥ 22.
 | 5 | Agent-ready platform: policy engine, agent capabilities, next-best-action, financial memory | ✅ merged |
 | 6 | Platform services: auth & RBAC, webhook developer platform, cross-border corridors & quotes | ✅ merged |
 | 7 | Governance & governance surfaces: maker-checker approvals, unified audit trail, USSD workflows, HTTP /v1 kernel | ✅ merged |
+| 8 | Transport completion + persistence: /v1 resource mounts (payments, collections, receivables) and the first file-backed store adapter | ✅ merged |
 
 ## Ecosystem
 
