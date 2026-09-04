@@ -1,0 +1,30 @@
+# Go backend CI — gates mirror the local merge gate (docs/ENGINEERING_STATUS.md).
+# NOTE: GitHub Actions is currently blocked by the account billing lock; this workflow
+# activates automatically once billing is resolved. Until then, local green is the gate.
+name: go
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend-go/**", ".github/workflows/go.yml"]
+  pull_request:
+    paths: ["backend-go/**", ".github/workflows/go.yml"]
+
+defaults:
+  run:
+    working-directory: backend-go
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - name: gofmt (must be empty)
+        run: test -z "$(gofmt -l .)"
+      - name: go vet
+        run: go vet ./...
+      - name: go test (race)
+        run: go test ./... -race -count=1
