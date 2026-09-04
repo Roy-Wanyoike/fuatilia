@@ -1,0 +1,128 @@
+# Fuatilia — minimal production topology (issue #75, roadmap P0 criterion 7).
+#
+#   PG (truth, ADR-0002) + NATS JetStream (event fabric, ADR-0003)
+#   + api + worker + a one-shot migrate job. Dev/staging-grade on purpose —
+#   "complexity is earned" (VISION §5); no Kubernetes.
+#
+# All configuration is interpolated from the environment (docker compose
+# auto-loads ./.env): cp .env.example .env, set the marked values, then
+#   docker compose up --build
+# scripts/validate_deploy.py statically enforces this file's structure and
+# the .env.example contract — see docs/DEPLOY.md for what that does and does
+# not prove (no Docker daemon exists in the build environment).
+name: fuatilia
+
+services:
+  # --- PostgreSQL: the only financial source of truth (ADR-0002) -----------
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fuatilia}
+      POSTGRES_DB: ${POSTGRES_DB:-fuatilia}
+      # Required, never defaulted: generate one (openssl rand -hex 24) —
+      # see .env.example. It authenticates the Go services' DATABASE_URL.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - copy .env.example to .env and generate one}
+      # The stdlib migration runner (db/pgclient.cjs) speaks PostgreSQL trust
+      # auth ONLY by design ("SASL/md5 refused loudly"), so the dev/staging
+      # cluster is initialized with trust auth. The port is NOT published —
+      # trust is unreachable from outside the compose network. POSTGRES_PASSWORD
+      # is still set above so the scram-capable Go/psql paths work unchanged.
+      # Full rationale: docs/DEPLOY.md § "Why trust auth in this compose".
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - fuatilia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  # --- NATS JetStream: the event fabric (ADR-0003) -------------------------
+  nats:
+    image: nats:2.11.17-alpine
+    # -js  = enable JetStream; -sd = stream state under the named volume.
+    # Losing this volume costs at-least-once redelivery buffering only —
+    # truth stays in PostgreSQL and replays deterministically (ADR-0003).
+    command: ["-js", "-sd", "/data"]
+    volumes:
+      - fuatilia_nats:/data
+    restart: unless-stopped
+
+  # --- migrate: one-shot, forward-only, idempotent schema job --------------
+  # Runs db/migrate.cjs (stdlib-only wire client; applied files are recorded
+  # in schema_migrations and skipped on re-run). api and worker wait for it
+  # to complete successfully — a failed migration never lets a binary boot
+  # against the wrong schema.
+  migrate:
+    image: node:22-alpine
+    working_dir: /app
+    entrypoint: ["node", "db/migrate.cjs"]
+    volumes:
+      - ./db:/app/db:ro
+    environment:
+      # db/migrate.cjs connects via PG* variables (trust auth) — DATABASE_URL
+      # is intentionally NOT used by this runner; see docs/DEPLOY.md.
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-fuatilia}
+      PGDATABASE: ${POSTGRES_DB:-fuatilia}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # --- api: the Go /v1 service (issue #72) ---------------------------------
+  api:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+      target: api
+    image: fuatilia-api:local
+    environment:
+      LISTEN_ADDR: ${LISTEN_ADDR:-0.0.0.0:8080}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required - copy .env.example to .env and set it}
+      # pgxpool tuning for the persistence adapters (issues #72/#73 contract).
+      FUATILIA_PG_MAX_CONNS: ${FUATILIA_PG_MAX_CONNS:-10}
+      FUATILIA_PG_MAX_CONN_LIFETIME: ${FUATILIA_PG_MAX_CONN_LIFETIME:-30m}
+      FUATILIA_PG_MAX_CONN_IDLE_TIME: ${FUATILIA_PG_MAX_CONN_IDLE_TIME:-5m}
+    ports:
+      # The ONLY published port in the stack. Keep in agreement with the api
+      # target's HEALTHCHECK (8080 inside the container).
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # --- worker: outbox relay → NATS JetStream (issue #74, ADR-0003) ---------
+  worker:
+    build:
+      context: ./backend-go
+      dockerfile: Dockerfile
+      target: worker
+    image: fuatilia-worker:local
+    environment:
+      # Reads the transactional outbox table (same PostgreSQL truth) and
+      # publishes to the fabric; at-least-once end-to-end — consumers are
+      # idempotent by contract (ADR-0003).
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required - copy .env.example to .env and set it}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      OUTBOX_BATCH: ${OUTBOX_BATCH:-100}
+      OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL:-1s}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-5}
+    depends_on:
+      nats:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  # Named + documented so backup/upgrade procedures can address them
+  # explicitly (docs/DEPLOY.md § Data & volumes).
+  fuatilia_pgdata:
+  fuatilia_nats:
