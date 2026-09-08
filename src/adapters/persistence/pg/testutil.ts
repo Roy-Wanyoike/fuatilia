@@ -20,7 +20,7 @@
  * deployments configure `FUATILIA_PG_*` (see the README).
  */
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -275,6 +275,11 @@ export const spawnEphemeralCluster = async (label: string): Promise<EphemeralClu
   const dataDir = await mkdtemp(path.join(tmpdir(), `fuatilia-pg-${label}-`));
   const socketDir = path.join(dataDir, 'socket');
   await runBin(binDir, 'initdb', ['-D', dataDir, '-A', 'trust', '-U', 'postgres', '-E', 'UTF8', '--no-instructions']);
+  // PostgreSQL does not create the -k socket directory — a missing one makes
+  // every start die with "could not create lock file ... No such file or
+  // directory" (observed on real 16.4). initdb requires an EMPTY data dir,
+  // so the socket dir is created only AFTER initdb, before the first start.
+  await mkdir(socketDir, { recursive: true });
 
   const port = await freePort();
   const database = `fuatilia_${label.replace(/[^a-z0-9]/gi, '_')}_test`;
@@ -327,6 +332,12 @@ export const spawnEphemeralCluster = async (label: string): Promise<EphemeralClu
   } finally {
     await admin.end().catch(() => undefined);
   }
+
+  // A throwaway cluster is still a REAL platform database: the platform
+  // migrations must be on it before any store boots (the lane DDL's anchors
+  // reference `orgs`, `users`, … — tables the migrations own). Without this,
+  // the first ensureReady() dies with 42P01 (relation "orgs" does not exist).
+  await ensureMigrated(url);
 
   const config = configFromUrl(url);
   return {

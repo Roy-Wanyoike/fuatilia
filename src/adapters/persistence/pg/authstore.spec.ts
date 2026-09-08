@@ -18,13 +18,13 @@
  * ephemeral cluster (real initdb/pg_ctl — never a stub). An unreachable
  * cluster fails the run, never a silent skip.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createUser } from '../../../domain/auth/user';
 import { defineRole, expandRolePermissions } from '../../../domain/auth/roles';
 import { grantRole } from '../../../domain/auth/assignments';
 import { issueKey } from '../../../domain/auth/apikeys';
+import type { ApiKey } from '../../../domain/auth/apikeys';
 import { openSession } from '../../../domain/auth/sessions';
-import { systemClock } from '../../../domain/shared';
 import type { Clock, Uuid } from '../../../domain/shared/ids';
 import { seedWorld } from '../../http/runtime/memory';
 import { createHttpKernel } from '../../http/server';
@@ -36,10 +36,16 @@ import { bootstrapTestDb, purgeOrgs, spawnEphemeralCluster, testDatabaseUrl } fr
 const T0 = '2026-03-01T08:00:00.000Z';
 const clock: Clock = { now: () => new Date(T0) };
 
+// Ids are unique per PROCESS (random run prefix), not per test: the lane
+// cluster is shared and rows survive until afterAll (and until a later
+// purge after a killed run), so a per-test reset would collide with rows
+// this or an earlier process already persisted — PostgreSQL would refuse
+// the duplicate INSERT and every test after the first would fail.
 let seq = 0;
+const RUN_PREFIX = crypto.randomUUID().slice(0, 8);
 const nextId = (): Uuid => {
   seq += 1;
-  return `00000000-0000-4000-8000-${String(seq).padStart(12, '0')}` as Uuid;
+  return `${RUN_PREFIX}-0000-4000-8000-${String(seq).padStart(12, '0')}` as Uuid;
 };
 
 let config: Record<string, unknown>;
@@ -49,10 +55,6 @@ const orgs: string[] = [];
 beforeAll(async () => {
   config = (await bootstrapTestDb()) as unknown as Record<string, unknown>;
   client = new PGClient({ config: config as never });
-});
-
-afterEach(() => {
-  seq = 0;
 });
 
 afterAll(async () => {
@@ -100,28 +102,45 @@ const makeGrant = (store: PGAuthStore) => {
   return granted.grant;
 };
 
-const SECRET = 'fuatilia-plaintext-secret-4f2a';
-const makeKey = (store: PGAuthStore) =>
-  issueKey(store.keys(), {
-    keyId: nextId(),
-    orgId: trackOrg(nextId()),
-    name: 'backend-ingest',
-    createdBy: nextId(),
-    secret: SECRET,
-    scopes: ['payments:intake'],
-    expiresAt: null,
-  }, store.codec, clock).key;
+// The secret's first bytes form the api-key PREFIX the domain enforces as
+// unique — a fixed literal would collide across keys and across runs (keys
+// boot from PostgreSQL). Every CALL gets a fresh secret; the plaintext-
+// absence assertions assert on the exact secret their key was issued with.
+const makeKey = (store: PGAuthStore): { key: ApiKey; secret: string } => {
+  const issuer = makeUser(store);
+  store.saveUser(issuer); // the seam persists explicitly — users() hands out a copy
+  const secret = `${crypto.randomUUID()}-plaintext-secret-4f2a`;
+  return {
+    key: issueKey(store.keys(), {
+      keyId: nextId(),
+      orgId: issuer.orgId,
+      name: 'backend-ingest',
+      createdBy: issuer.userId,
+      secret,
+      scopes: ['payments:intake'],
+      expiresAt: null,
+    }, store.codec, clock).key,
+    secret,
+  };
+};
 
-const makeSession = () =>
-  openSession({
+// sessions carries fk_sessions_user (org_id, user_id) → users — same rule.
+const makeSession = (store: PGAuthStore) => {
+  const user = makeUser(store);
+  store.saveUser(user); // fk_sessions_user target must be a REAL persisted row
+  return openSession({
     sessionId: nextId(),
-    userId: nextId(),
-    orgId: trackOrg(nextId()),
+    userId: user.userId,
+    orgId: user.orgId,
     idleTimeoutMs: 900_000,
     absoluteTimeoutMs: 43_200_000,
   }, clock).session;
+};
 
-const normalized = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+// Aggregates carry bigint minor units — the default JSON.stringify throws
+// on bigint, so every bigint becomes its canonical string form first.
+const normalized = (value: unknown): unknown =>
+  JSON.parse(JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v)));
 
 describe('PGAuthStore — boot contract', () => {
   it('refuses mutations before ensureReady() (blind writes would collide with stored state)', async () => {
@@ -144,8 +163,8 @@ describe('PGAuthStore — durability round-trips (save → flush → re-boot →
     const user = makeUser(store);
     const role = makeRole(store);
     const grant = makeGrant(store);
-    const key = makeKey(store);
-    const session = makeSession();
+    const { key } = makeKey(store);
+    const session = makeSession(store);
     const denial = {
       name: 'auth.denied',
       version: 1 as const,
@@ -193,7 +212,7 @@ describe('PGAuthStore — durability round-trips (save → flush → re-boot →
   it('API keys are stored HASHED — the plaintext secret reaches no column', async () => {
     const store = new PGAuthStore(new PGClient({ config: config as never }));
     await store.ensureReady();
-    const key = makeKey(store);
+    const { key, secret } = makeKey(store);
     store.saveKey(key);
     await store.flush();
 
@@ -201,10 +220,10 @@ describe('PGAuthStore — durability round-trips (save → flush → re-boot →
     expect(probe.rows).toHaveLength(1);
     for (const [column, value] of Object.entries(probe.rows[0] ?? {})) {
       const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-      expect(`${column}=${serialized ?? ''}`).not.toContain(SECRET);
+      expect(`${column}=${serialized ?? ''}`).not.toContain(secret);
     }
     // the hash side is deterministic per codec — a re-issue hashes identically
-    expect(key.secretHash).not.toBe(SECRET);
+    expect(key.secretHash).not.toBe(secret);
   });
 });
 
@@ -215,8 +234,10 @@ describe('PGAuthStore — swap-in at the kernel seam (server.spec scenarios over
     await store.ensureReady();
     await resourceStore.ensureReady();
 
-    const world = seedWorld(store, clock);
-    const kernel = createHttpKernel({ store, resourceStore, clock: systemClock });
+    const world = seedWorld(store, clock, (n: number) =>
+      `${RUN_PREFIX}-0000-4000-8000-${String(n + 1000).padStart(12, '0')}` as Uuid,
+    );
+    const kernel = createHttpKernel({ store, resourceStore, clock });
     const listened = await kernel.listen(0);
     try {
       const url = (path: string): string => `${listened.url}${path}`;
@@ -244,14 +265,14 @@ describe('PGAuthStore — swap-in at the kernel seam (server.spec scenarios over
         body: JSON.stringify({ orgId: world.orgId, email: 'pg-adapter@fuatilia.test', username: 'pg-adapter', displayName: 'PG Adapter User' }),
       });
       expect(authed.status).toBe(201);
-      const created = (await authed.json()) as { data: { id: string; orgId: string } };
-      expect(created.data.orgId).toBe(world.orgId);
+      const created = (await authed.json()) as { data: { user: { id: string; orgId: string } } };
+      expect(created.data.user.orgId).toBe(world.orgId);
       // the created user landed in the PG projection, not just the response
-      expect(store.users().some((u) => u.userId === created.data.id)).toBe(true);
+      expect(store.users().some((u) => u.userId === created.data.user.id)).toBe(true);
       await store.flush();
       const reborn = new PGAuthStore(new PGClient({ config: config as never }));
       await reborn.ensureReady();
-      expect(reborn.users().some((u) => u.userId === created.data.id)).toBe(true);
+      expect(reborn.users().some((u) => u.userId === created.data.user.id)).toBe(true);
       await reborn.close();
     } finally {
       await listened.close();

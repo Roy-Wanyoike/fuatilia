@@ -686,8 +686,13 @@ export class PGResourceStore implements ResourceStore {
       .finally(() => {
         this.pumping = false;
         // A save that raced the loop's empty-queue exit must not sit forever:
-        // re-arm when work arrived during the closing window.
-        if (this.queue.length > 0) this.scheduleDrain();
+        // re-arm when work arrived during the closing window. A FAILED batch
+        // also occupies the queue, but it must NOT re-arm the loop: the
+        // sticky-failure contract reserves re-arming for an explicit flush(),
+        // and re-arming over a sticky failure would spin the microtask queue
+        // forever (drainLoop exits immediately on failure, finally re-arms,
+        // drainLoop exits again — a 100%-CPU hang that no timeout can break).
+        if (this.failure === null && this.queue.length > 0) this.scheduleDrain();
       });
   }
 
