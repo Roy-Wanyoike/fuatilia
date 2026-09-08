@@ -1,6 +1,4 @@
 # PostgreSQL schema CI — runs db/validate.sh --ci against a postgres service.
-# NOTE: GitHub Actions is currently blocked by the account billing lock; this workflow
-# activates automatically once billing is resolved. Until then, local green is the gate.
 name: db
 
 on:

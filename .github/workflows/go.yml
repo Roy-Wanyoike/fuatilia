@@ -1,6 +1,4 @@
 # Go backend CI — gates mirror the local merge gate (docs/ENGINEERING_STATUS.md).
-# NOTE: GitHub Actions is currently blocked by the account billing lock; this workflow
-# activates automatically once billing is resolved. Until then, local green is the gate.
 name: go
 
 on:
@@ -28,3 +26,7 @@ jobs:
         run: go vet ./...
       - name: go test (race)
         run: go test ./... -race -count=1
+      - name: govulncheck (known vulnerabilities in stdlib + modules)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
