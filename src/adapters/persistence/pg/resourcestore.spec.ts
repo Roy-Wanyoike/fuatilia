@@ -15,7 +15,7 @@
  * Real PG 16.4 (FUATILIA_TEST_DATABASE_URL lane cluster + a private
  * ephemeral cluster for the dead-postmaster suite). Never a silent skip.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createInvoice, addInvoiceLine, issueInvoice } from '../../../domain/receivables/invoice';
 import { openReceivable } from '../../../domain/receivables/receivable';
 import { intakePayment } from '../../../domain/payments/intake';
@@ -29,10 +29,16 @@ import { bootstrapTestDb, purgeOrgs, spawnEphemeralCluster, testDatabaseUrl } fr
 const T0 = '2026-03-01T08:00:00.000Z';
 const clock: Clock = { now: () => new Date(T0) };
 
+// Ids are unique per PROCESS (random run prefix), not per test: the lane
+// cluster is shared and rows survive until afterAll, and case-sequence
+// high-water marks are DURABLE by design — a per-test id reset would make
+// every test after the first re-enter PostgreSQL with ids (and orgs) that
+// an earlier test or process already advanced.
 let seq = 0;
+const RUN_PREFIX = crypto.randomUUID().slice(0, 8);
 const nextId = (): Uuid => {
   seq += 1;
-  return `00000000-0000-4000-8000-${String(seq).padStart(12, '0')}` as Uuid;
+  return `${RUN_PREFIX}-0000-4000-8000-${String(seq).padStart(12, '0')}` as Uuid;
 };
 
 let config: Record<string, unknown>;
@@ -42,10 +48,6 @@ const orgs: string[] = [];
 beforeAll(async () => {
   config = (await bootstrapTestDb()) as unknown as Record<string, unknown>;
   client = new PGClient({ config: config as never });
-});
-
-afterEach(() => {
-  seq = 0;
 });
 
 afterAll(async () => {
@@ -72,8 +74,10 @@ const makeReceivable = (orgId: Uuid, amountMinor = 10_000) => {
 const makePayment = (amountMinor = 4_000) =>
   intakePayment({
     channel: 'c2b',
-    externalRef: `SDK-${seq}-REF`,
-    idempotencyKey: `idem-${seq}`,
+    // ids derive deterministically from (channel, idempotencyKey) — the RUN
+    // prefix keeps re-runs of this suite against the same cluster collision-free
+    externalRef: `SDK-${RUN_PREFIX}-${seq}-REF`,
+    idempotencyKey: `idem-${RUN_PREFIX}-${seq}`,
     amount: Money.ofMinor(amountMinor, 'KES'),
   }, { clock }).payment;
 
@@ -87,7 +91,10 @@ const makeCase = (orgId: Uuid, receivableIds: readonly Uuid[], sequenceNo: numbe
     sequenceNo,
   }, [], clock).case;
 
-const normalized = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+// Aggregates carry bigint minor units — the default JSON.stringify throws
+// on bigint, so every bigint becomes its canonical string form first.
+const normalized = (value: unknown): unknown =>
+  JSON.parse(JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v)));
 
 describe('PGResourceStore — boot contract', () => {
   it('refuses mutations before ensureReady() (the projection must come from PostgreSQL first)', async () => {
