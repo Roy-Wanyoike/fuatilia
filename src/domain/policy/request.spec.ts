@@ -60,7 +60,7 @@ const expectCode = (fn: () => unknown, code: string): void => {
 // --- the governed vocabularies ---------------------------------------------------
 
 describe('policy request vocabularies', () => {
-  it('exposes exactly the issue #34 action vocabulary', () => {
+  it('exposes exactly the issue #34 + #92 action vocabulary', () => {
     expect([...ACTION_TYPES]).toEqual([
       'send_reminder',
       'send_whatsapp',
@@ -70,6 +70,7 @@ describe('policy request vocabularies', () => {
       'escalate',
       'write_off',
       'refund',
+      'collect_now_stk_push',
     ]);
   });
 
