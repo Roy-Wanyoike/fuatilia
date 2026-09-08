@@ -6,36 +6,69 @@ on:
     branches: [main]
 
 jobs:
-  build-test:
+  # Root package: TypeScript domain core + adapters, including the 24
+  # PG-backed persistence specs (issue #73). The harness never silent-skips:
+  # it hard-requires a reachable PostgreSQL 16 cluster (service below) and
+  # real initdb/pg_ctl binaries (installed below). If PG is missing the run
+  # FAILS — a green suite against a database that was not there would be a lie.
+  domain:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node: [22, 24]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: fuatilia_pgadapters_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fuatilia_pgadapters_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FUATILIA_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5435/fuatilia_pgadapters_test
+      FUATILIA_PG_BIN_DIR: /usr/lib/postgresql/16/bin
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Build, typecheck, test (with self-reporting summary)
-        id: pipe
+      - name: Install PostgreSQL 16 (ephemeral-cluster specs need initdb/pg_ctl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-16
+      - name: Install, typecheck, test (full suite incl. PG-backed specs)
         shell: bash
         run: |
-          set +e
-          S="$GITHUB_STEP_SUMMARY"
-          {
-            echo "## CI — node $(node -v), npm $(npm -v), $(uname -m)"
-            echo "### npm ci (tail 20)"
-            npm ci --no-audit --no-fund 2>&1 | tail -n 20
-            echo "### typecheck (tail 40)"
-            npm run typecheck 2>&1 | tail -n 40
-            echo "### test (tail 80)"
-            npm test 2>&1 | tail -n 80
-          } >> "$S" 2>&1
-          npm run typecheck >/dev/null 2>&1; TC=$?
-          npm test >/dev/null 2>&1; TE=$?
-          {
-            echo "## GATE"
-            echo "typecheck=$TC test=$TE"
-          } >> "$S" 2>&1
-          echo "FINAL typecheck=$TC test=$TE"
-          exit $(( TC + TE ))
+          set -e
+          echo "## CI — node $(node -v), npm $(npm -v), $(uname -m)"
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+
+  # Frontend package (Next.js): separate manifest, so it gets its own job.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install, typecheck, test
+        shell: bash
+        run: |
+          set -e
+          npm ci --no-audit --no-fund
+          npm run typecheck --if-present
+          npm test --if-present

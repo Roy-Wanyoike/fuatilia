@@ -1,0 +1,21 @@
+# Supply-chain scanning (production audit §5.2: "no audit/scan step").
+# Dependabot watches both npm manifests, the Go module, and the Actions
+# versions; alerts open PRs weekly.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "gomod"
+    directory: "/backend-go"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
