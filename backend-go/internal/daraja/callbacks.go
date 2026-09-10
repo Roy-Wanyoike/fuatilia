@@ -56,10 +56,11 @@ type ParsedC2bCallback struct {
 	TransTime            time.Time
 	BusinessShortCode    string
 	BillRefNumber        string   // '' when absent (Buy Goods tills)
-	DeclaredRefs         []string // BillRefNumber split on '/' and ','
+	DeclaredRefs         []string // BillRefNumber split on '/' and ',', plus a DISTINCT InvoiceNumber (TS parity)
 	MSISDN               string
 	AmountMinor          int64
-	OrgAccountBalanceMin int64
+	OrgAccountBalanceMin int64 // evidence only — never intake money; 0 when HasOrgAccountBalance is false
+	HasOrgAccountBalance bool  // OrgAccountBalance is OPTIONAL on the wire: absent ≠ zero (TS parity)
 	InvoiceNumber        string
 	ThirdPartyTransID    string
 }
@@ -293,7 +294,7 @@ func parseC2B(p map[string]any, kind CallbackKind) (ParsedC2bCallback, error) {
 		return ParsedC2bCallback{}, err
 	}
 	amountRaw, present := p["TransAmount"]
-	if !present || amountRaw == nil {
+	if !present || amountRaw == nil || amountRaw == "" { // '' is the TS lane's AMOUNT_REQUIRED shape
 		return ParsedC2bCallback{}, errf(CodeAmountRequired, "TransAmount is required")
 	}
 	amountStr, ok := numberOrDecimalString(amountRaw)
@@ -318,17 +319,38 @@ func parseC2B(p map[string]any, kind CallbackKind) (ParsedC2bCallback, error) {
 	case string:
 		billRef = strings.TrimSpace(v)
 	case float64:
-		billRef = strconv.FormatInt(int64(v), 10)
+		// JS String() parity via FormatFloat(-1): a numeric ref keeps
+		// its exact decimal shape (123.45 stays "123.45") — a truncated
+		// reference would point the payment at a DIFFERENT account (K1).
+		billRef = strings.TrimSpace(strconv.FormatFloat(v, 'f', -1, 64))
 	default:
 		return ParsedC2bCallback{}, errf(CodeBillRefMalformed, "BillRefNumber must be a string or number")
 	}
-	balanceRaw, ok := nonEmptyString(p["OrgAccountBalance"])
-	if !ok {
-		return ParsedC2bCallback{}, errf(CodeAmountMalformed, "OrgAccountBalance is required and must be a decimal string")
+
+	declaredRefs := billRefToDeclaredRefs(billRef)
+	if invoiceNumber, ok := nonEmptyString(p["InvoiceNumber"]); ok {
+		ref := strings.TrimSpace(invoiceNumber)
+		if !containsString(declaredRefs, ref) {
+			declaredRefs = append(declaredRefs, ref)
+		}
 	}
-	balanceMinor, err := parseWireAmountMinor(balanceRaw)
-	if err != nil {
-		return ParsedC2bCallback{}, errf(CodeAmountMalformed, "OrgAccountBalance must be a decimal")
+
+	// OrgAccountBalance is OPTIONAL on the wire (Buy Goods tills often
+	// omit it): absent / null / '' parse fine; when PRESENT it must be a
+	// decimal the TS lane would accept — evidence only, never intake
+	// money. Present-but-junk is refused, never coerced (K1).
+	var balanceMinor int64
+	hasBalance := false
+	if raw, present := p["OrgAccountBalance"]; present && raw != nil && !isEmptyString(raw) {
+		balanceStr, ok := numberOrDecimalString(raw)
+		if !ok {
+			return ParsedC2bCallback{}, errf(CodeAmountMalformed, "OrgAccountBalance must be a decimal")
+		}
+		minor, perr := parseWireAmountMinor(balanceStr)
+		if perr != nil {
+			return ParsedC2bCallback{}, errf(CodeAmountMalformed, "OrgAccountBalance must be a decimal")
+		}
+		balanceMinor, hasBalance = minor, true
 	}
 
 	return ParsedC2bCallback{
@@ -338,10 +360,11 @@ func parseC2B(p map[string]any, kind CallbackKind) (ParsedC2bCallback, error) {
 		TransTime:            transTime,
 		BusinessShortCode:    strings.TrimSpace(shortCode),
 		BillRefNumber:        billRef,
-		DeclaredRefs:         billRefToDeclaredRefs(billRef),
+		DeclaredRefs:         declaredRefs,
 		MSISDN:               msisdn,
 		AmountMinor:          amountMinor,
 		OrgAccountBalanceMin: balanceMinor,
+		HasOrgAccountBalance: hasBalance,
 		InvoiceNumber:        stringField(p, "InvoiceNumber"),
 		ThirdPartyTransID:    stringField(p, "ThirdPartyTransID"),
 	}, nil
@@ -363,6 +386,23 @@ func billRefToDeclaredRefs(raw string) []string {
 		}
 	}
 	return refs
+}
+
+// isEmptyString reports whether the raw value is a zero-length JSON string —
+// the TS lane treats OrgAccountBalance === ” as absent (not junk).
+func isEmptyString(raw any) bool {
+	s, ok := raw.(string)
+	return ok && s == ""
+}
+
+// containsString reports whether v is already in list (declared-ref dedup).
+func containsString(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 // parseSTK mirrors parseStk in wire.ts.

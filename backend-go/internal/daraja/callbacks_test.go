@@ -136,9 +136,14 @@ func TestParseC2BMalformedCorpus(t *testing.T) {
 		{"garbage TransTime", func(p map[string]any) { p["TransTime"] = "2026-09-08 10:15" }, CodeTransTimeMalformed},
 		{"impossible month", func(p map[string]any) { p["TransTime"] = "20261308101530" }, CodeTransTimeMalformed},
 		{"missing amount", func(p map[string]any) { delete(p, "TransAmount") }, CodeAmountRequired},
+		{"empty amount string", func(p map[string]any) { p["TransAmount"] = "" }, CodeAmountRequired},
+		{"whitespace amount", func(p map[string]any) { p["TransAmount"] = "   " }, CodeAmountMalformed},
 		{"non-numeric amount", func(p map[string]any) { p["TransAmount"] = "many" }, CodeAmountMalformed},
 		{"negative amount", func(p map[string]any) { p["TransAmount"] = "-2500.00" }, CodeAmountMalformed},
 		{"overflow amount", func(p map[string]any) { p["TransAmount"] = "99999999999999999999999.00" }, CodeAmountMalformed},
+		{"leading-zero amount", func(p map[string]any) { p["TransAmount"] = "02500" }, CodeAmountMalformed},
+		{"dangling-point amount", func(p map[string]any) { p["TransAmount"] = "2500." }, CodeAmountMalformed},
+		{"bare-fraction amount", func(p map[string]any) { p["TransAmount"] = ".50" }, CodeAmountMalformed},
 		{"bad shortcode", func(p map[string]any) { p["BusinessShortCode"] = "1234" }, CodeShortCodeMalformed},
 		{"bad msisdn", func(p map[string]any) { p["MSISDN"] = "0712345678" }, CodeMSISDNMalformed},
 		{"bill ref not string|number", func(p map[string]any) { p["BillRefNumber"] = []any{"x"} }, CodeBillRefMalformed},
@@ -356,10 +361,17 @@ func TestMoneyBoundary(t *testing.T) {
 		{"2500", 250_000, false},
 		{"2500.5", 250_050, false},
 		{"0.01", 1, false},
+		{"0", 0, false},
+		{" 2500.00 ", 250_000, false}, // trimmed first, exactly like the TS lane
 		{"150200.00", 15_020_000, false},
 		{"", 0, true},
 		{"-1.00", 0, true},
 		{"1.234", 0, true}, // more than 2 fraction digits: refused, never truncated
+		{".50", 0, true},   // no integer part — never coerced into 50 cents
+		{"2500.", 0, true}, // dangling point — never coerced into whole shillings
+		{"02500", 0, true}, // leading zero — not a wire decimal, refused
+		{"00", 0, true},
+		{"+2500", 0, true},
 		{"abc", 0, true},
 		{"1,000.00", 0, true}, // thousands separators are NOT wire format
 	}
@@ -384,4 +396,106 @@ func TestMoneyBoundary(t *testing.T) {
 	if v, err := wholeShillings(250_000); err != nil || v != 2500 {
 		t.Errorf("wholeShillings(250000) = %d, %v", v, err)
 	}
+}
+
+// K1 parity rows for the divergences the gap audit found: the TS lane accepts
+// payloads the Go parser used to dead-letter (optional OrgAccountBalance,
+// numeric MpesaReceiptNumber) and refuses shapes Go used to coerce silently
+// (".50", "02500", numeric BillRefNumber truncation).
+
+func TestParseC2BOrgAccountBalanceOptional(t *testing.T) {
+	t.Parallel()
+	t.Run("absent is fine — Buy Goods tills often omit it", func(t *testing.T) {
+		p := c2bPayload()
+		delete(p, "OrgAccountBalance")
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if c2b.HasOrgAccountBalance || c2b.OrgAccountBalanceMin != 0 {
+			t.Fatalf("absent balance must not be invented: %+v", c2b)
+		}
+	})
+	t.Run("empty string is treated as absent (TS parity)", func(t *testing.T) {
+		p := c2bPayload()
+		p["OrgAccountBalance"] = ""
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if c2b.HasOrgAccountBalance {
+			t.Fatalf("'' must parse as absent, got %+v", c2b)
+		}
+	})
+	t.Run("null is treated as absent", func(t *testing.T) {
+		p := c2bPayload()
+		p["OrgAccountBalance"] = nil
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if c2b.HasOrgAccountBalance {
+			t.Fatalf("null must parse as absent, got %+v", c2b)
+		}
+	})
+	t.Run("present numeric balance is accepted as evidence", func(t *testing.T) {
+		p := c2bPayload()
+		p["OrgAccountBalance"] = 150200.0
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if !c2b.HasOrgAccountBalance || c2b.OrgAccountBalanceMin != 15_020_000 {
+			t.Fatalf("balance = %d/%v, want 15020000/true", c2b.OrgAccountBalanceMin, c2b.HasOrgAccountBalance)
+		}
+	})
+	t.Run("present junk type is refused", func(t *testing.T) {
+		p := c2bPayload()
+		p["OrgAccountBalance"] = map[string]any{"amount": 1}
+		wantCode(t, p, ParseOptions{C2BKind: KindC2BConfirm}, CodeAmountMalformed)
+	})
+	t.Run("present over-precise balance is refused", func(t *testing.T) {
+		p := c2bPayload()
+		p["OrgAccountBalance"] = 0.30000000000000004
+		wantCode(t, p, ParseOptions{C2BKind: KindC2BConfirm}, CodeAmountMalformed)
+	})
+}
+
+func TestParseC2BInvoiceNumberJoinsDeclaredRefs(t *testing.T) {
+	t.Parallel()
+	t.Run("distinct invoice is appended", func(t *testing.T) {
+		p := c2bPayload()
+		p["InvoiceNumber"] = "TILL-88412"
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		want := []string{"INV-2026-0042", "TILL-88412"}
+		if len(c2b.DeclaredRefs) != len(want) || c2b.DeclaredRefs[0] != want[0] || c2b.DeclaredRefs[1] != want[1] {
+			t.Fatalf("DeclaredRefs = %v, want %v", c2b.DeclaredRefs, want)
+		}
+	})
+	t.Run("duplicate invoice is deduped (trimmed first)", func(t *testing.T) {
+		p := c2bPayload()
+		p["BillRefNumber"] = "INV-2026-0042/INV-77"
+		p["InvoiceNumber"] = " INV-77 "
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		want := []string{"INV-2026-0042", "INV-77"}
+		if len(c2b.DeclaredRefs) != len(want) || c2b.DeclaredRefs[1] != want[1] {
+			t.Fatalf("DeclaredRefs = %v, want %v", c2b.DeclaredRefs, want)
+		}
+	})
+	t.Run("whitespace-only invoice is skipped", func(t *testing.T) {
+		p := c2bPayload()
+		p["InvoiceNumber"] = "   "
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if len(c2b.DeclaredRefs) != 1 || c2b.DeclaredRefs[0] != "INV-2026-0042" {
+			t.Fatalf("DeclaredRefs = %v, want just the bill ref", c2b.DeclaredRefs)
+		}
+	})
+}
+
+func TestParseC2BBillRefNumberNumericKeepsDecimalShape(t *testing.T) {
+	t.Parallel()
+	t.Run("float ref keeps its decimal shape (no truncation)", func(t *testing.T) {
+		p := c2bPayload()
+		p["BillRefNumber"] = 1042.45
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if c2b.BillRefNumber != "1042.45" {
+			t.Fatalf("BillRefNumber = %q, want 1042.45 (String() parity)", c2b.BillRefNumber)
+		}
+	})
+	t.Run("integral ref is the plain digits", func(t *testing.T) {
+		p := c2bPayload()
+		p["BillRefNumber"] = 1042.0
+		c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
+		if c2b.BillRefNumber != "1042" {
+			t.Fatalf("BillRefNumber = %q, want 1042", c2b.BillRefNumber)
+		}
+	})
 }
