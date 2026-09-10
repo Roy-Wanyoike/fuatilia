@@ -8,7 +8,7 @@ are). The file-backed adapter in `src/adapters/persistence/` remains a dev/store
 
 ```
 db/
-├── migrations/        # 0001..0015, forward-only, one file = one atomic transaction
+├── migrations/        # 0001..0016, forward-only, one file = one atomic transaction
 ├── pgclient.cjs       # stdlib-only PostgreSQL wire client (the portable server bundle
 │                      #   ships no psql; every client-side step goes through this)
 ├── migrate.cjs        # forward-only runner; suite tracked in schema_migrations;
@@ -18,10 +18,11 @@ db/
 ├── validate.sh        # end-to-end gate: throwaway cluster → migrate ×2 → smoke
 ├── seed_explain.cjs   # deterministic 135k-row fixture for index evidence (issue #137)
 ├── explain_hot.cjs    # EXPLAIN (ANALYZE, BUFFERS) runner over the mounted hot queries
-└── explain/           # committed before/after evidence for 0015
+├── explain_179.cjs    # EXPLAIN evidence runner for the #179 audit-chain probe + index drop
+└── explain/           # committed before/after evidence for 0015 and 0016
 ```
 
-## Schema map (15 migrations, ~30 tables)
+## Schema map (16 migrations, ~30 tables)
 
 | Migration | Domain | Invariants encoded as DDL |
 |---|---|---|
@@ -40,6 +41,7 @@ db/
 | 0013_audit_outbox | audit_events, idempotency_keys, outbox_events | §37 append-only audit + per-org hash chain; R9/C5 durable first-write-wins; outbox unique event_id |
 | 0014_crossborder | corridors, fx_quotes, transfer_intents | R10 quotes immutable; quote snapshot frozen at authorization; no fund-truth writes |
 | 0015_read_model_indexes | 10 indexes over the /v1 read models (purely additive) | query→index map below; every index EXPLAIN-evidenced before/after on a seeded 0014-state DB (issue #137) |
+| 0016_drop_subsumed_payments_index | drops `idx_payments_initiated_at` (subsumed by 0015) | EXPLAIN-evidenced in `db/explain/0016-{before,after}.txt` (issue #179) |
 
 Every constraint carries an invariant-ID comment (`R1`, `R2`, `R8`, `R9`, `R10`, `K5`, `§37`,
 `H4`…) traceable to `docs/07-invariants.md` and the domain lane it mirrors in `src/domain/`.
@@ -56,7 +58,7 @@ captured with `EXPLAIN (ANALYZE, BUFFERS)` before/after on the seeded fixture
 | `GET /v1/receivables` default page (ReceivablesByOrg) | `idx_receivables_org_created (org_id, created_at, id)` | 9.3 ms seq-scan+sort → **0.06 ms** ordered index scan |
 | `GET /v1/receivables?sort=dueDate` | `idx_receivables_org_due (org_id, due_date, id)` | 8.9 ms → **0.34 ms** |
 | `GET /v1/payments` default page (PaymentsByOrg) | `idx_payments_org_created` | 12.2 ms → **0.03 ms** |
-| `GET /v1/payments?sort=initiatedAt` | `idx_payments_org_initiated (org_id, initiated_at, id)` | sub-ms (id tiebreak now index-ordered; subsumes `idx_payments_initiated_at`) |
+| `GET /v1/payments?sort=initiatedAt` | `idx_payments_org_initiated (org_id, initiated_at, id)` | sub-ms (id tiebreak now index-ordered; sole carrier since 0016 dropped the subsumed `idx_payments_initiated_at`) |
 | `GET /v1/collections/cases` default page (CasesByOrg) | `idx_collections_cases_org_created` | 1.1 ms → **0.02 ms** |
 | `GET /v1/payments/:paymentId` allocations + R6 ceiling input (AllocationsForPayment / CommittedAgainstPayment) | `idx_allocations_payment_live (org_id, source_type, source_id, allocated_at, id) WHERE reversed_at IS NULL` | ordered index scan, sort node eliminated |
 | `GET /v1/collections/cases/:caseId` pending-promise overlay (CaseHasPendingPromise) | `idx_promises_receivable_open (org_id, receivable_id) WHERE state IN (created,pending,partially_fulfilled)` | 0.24 ms seq-scan of all live promises → **0.008 ms** index-only |
@@ -73,14 +75,21 @@ Deliberate exclusions / findings:
 - **Deep OFFSET pages** still walk the skipped index entries (inherent to
   offset pagination; the 0015 indexes remove the disk-spill sort, not the
   walk). A keyset cursor would be a Go-lane change.
-- **Flagged for an out-of-lane fix**: `infra.appendAuditTx`'s chain-head probe
-  uses `org_id IS NOT DISTINCT FROM $1`, which the planner cannot bind to
-  `uq_audit_events_org_seq` — it seq-scans `audit_events` on every consequential
-  command (O(chain) growth). The fix is a Go query-shape change (`org_id = $1`
-  plus an explicit NULL-org branch), not an index.
-- `idx_payments_initiated_at` (0005) is subsumed by `idx_payments_org_initiated`
-  but intentionally NOT dropped — 0015 is purely additive; a cleanup lane can
-  drop it with its own evidence.
+- **Audit chain-head probe — FIXED in this lane (#179)**: `infra.appendAuditTx`
+  used to read the per-org head with `org_id IS NOT DISTINCT FROM $1`, which the
+  planner cannot bind to `uq_audit_events_org_seq` — it seq-scanned (or filtered
+  an index-only scan over) the whole `audit_events` chain on every consequential
+  command (O(chain) growth, ~8 ms at 20k rows). The writer now probes the head
+  with two bindable shapes — `org_id = $1` (org-scoped denials) and
+  `org_id IS NULL` (pre-authentication denials) — as one backward LIMIT-1 scan
+  of the unique index each. Concurrency safety re-proven by
+  `backend-go/internal/infra/audit_test.go` (parallel-append storm: gapless
+  per-org sequence, unbroken hash chain, append-only trigger intact);
+  EXPLAIN evidence in `db/explain/0016-{before,after}.txt`.
+- `idx_payments_initiated_at` (0005) was subsumed by `idx_payments_org_initiated`
+  and is DROPPED by migration 0016 (issue #179) — the ?sort=initiatedAt page
+  keeps its ordered scan (evidence: `db/explain/0016-*.txt`), and the write
+  path maintains one b-tree fewer.
 - **Why not `CREATE INDEX CONCURRENTLY`:** the runner executes each migration
   file as one Query message = one implicit transaction, and CONCURRENTLY cannot
   run inside a transaction block. Plain `CREATE INDEX` takes a brief SHARE lock

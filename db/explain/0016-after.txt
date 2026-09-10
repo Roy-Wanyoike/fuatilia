@@ -1,0 +1,79 @@
+# EXPLAIN ANALYZE evidence — 0016: audit-chain append shape + subsumed index drop (issue #179)
+# tag:      after
+# server:  PostgreSQL 16.4
+# fixture: 19000 | 20000 | 0 | 25000  (audit_main_org | audit_all | audit_null_org | payments_all)
+# indexes: idx_payments_customer, idx_payments_org_created, idx_payments_org_initiated, idx_payments_state, idx_payments_unapplied, uq_audit_events_org_id, uq_audit_events_org_seq
+# params:  org=a1370000-0000-4000-8000-000000000001
+
+======================================================================================
+AUDIT-OLD  audit chain head per consequential command — BEFORE #179 (IS NOT DISTINCT FROM, unbindable)
+    repo: infra.appendAuditTx (pre-#179)
+Aggregate  (cost=1887.79..1887.80 rows=1 width=40) (actual time=7.966..7.968 rows=1 loops=1)
+  Buffers: shared hit=842
+  InitPlan 1 (returns $0)
+    ->  Limit  (cost=1086.00..1086.00 rows=1 width=73) (actual time=5.142..5.143 rows=1 loops=1)
+          Buffers: shared hit=741
+          ->  Sort  (cost=1086.00..1133.50 rows=19000 width=73) (actual time=5.141..5.141 rows=1 loops=1)
+                Sort Key: audit_events_1.seq DESC
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=741
+                ->  Seq Scan on audit_events audit_events_1  (cost=0.00..991.00 rows=19000 width=73) (actual time=0.007..2.877 rows=19000 loops=1)
+                      Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+                      Rows Removed by Filter: 1000
+                      Buffers: shared hit=741
+  ->  Index Only Scan using uq_audit_events_org_seq on audit_events  (cost=0.29..754.29 rows=19000 width=8) (actual time=0.011..1.838 rows=19000 loops=1)
+        Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+        Rows Removed by Filter: 1000
+        Heap Fetches: 0
+        Buffers: shared hit=101
+Planning Time: 0.107 ms
+Execution Time: 7.987 ms
+
+======================================================================================
+AUDIT-NEW-ORG  audit chain head — AFTER #179: bindable org_id = $1 probe (org-scoped denials)
+    repo: infra.appendAuditTx (auditChainHeadByOrg)
+Limit  (cost=0.29..0.41 rows=1 width=73) (actual time=0.003..0.003 rows=1 loops=1)
+  Buffers: shared hit=3
+  ->  Index Scan Backward using uq_audit_events_org_seq on audit_events  (cost=0.29..2411.22 rows=19000 width=73) (actual time=0.003..0.003 rows=1 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=3
+Planning Time: 0.021 ms
+Execution Time: 0.010 ms
+
+======================================================================================
+AUDIT-NEW-NULLORG  audit chain head — AFTER #179: bindable org_id IS NULL probe (pre-auth denials)
+    repo: infra.appendAuditTx (auditChainHeadNullOrg)
+Limit  (cost=6.06..6.07 rows=1 width=73) (actual time=0.006..0.006 rows=0 loops=1)
+  Buffers: shared hit=2
+  ->  Sort  (cost=6.06..6.07 rows=1 width=73) (actual time=0.006..0.006 rows=0 loops=1)
+        Sort Key: seq DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2
+        ->  Index Scan using uq_audit_events_org_id on audit_events  (cost=0.29..6.05 rows=1 width=73) (actual time=0.005..0.005 rows=0 loops=1)
+              Index Cond: (org_id IS NULL)
+              Buffers: shared hit=2
+Planning Time: 0.020 ms
+Execution Time: 0.010 ms
+
+======================================================================================
+PAY-SORT  GET /v1/payments?sort=initiatedAt&order=desc — whitelisted sort (carrier changes at 0016)
+    repo: repositories.PaymentsByOrg (sortCol="initiated_at", desc)
+Limit  (cost=6.80..10.71 rows=25 width=230) (actual time=0.357..0.366 rows=25 loops=1)
+  Buffers: shared hit=50
+  ->  Incremental Sort  (cost=6.80..3765.53 rows=24000 width=230) (actual time=0.088..0.096 rows=25 loops=1)
+        Sort Key: initiated_at DESC, id
+        Presorted Key: initiated_at
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+        Buffers: shared hit=50
+        ->  Index Scan Backward using idx_payments_org_initiated on payments  (cost=0.41..2798.16 rows=24000 width=230) (actual time=0.014..0.059 rows=46 loops=1)
+              Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Buffers: shared hit=50
+Planning Time: 0.101 ms
+Execution Time: 0.384 ms
+
+======================================================================================
+SUMMARY (after) — execution time after warm-up
+  AUDIT-OLD          7.987 ms   peak ?
+  AUDIT-NEW-ORG      0.010 ms   peak ?
+  AUDIT-NEW-NULLORG   0.010 ms   peak ?
+  PAY-SORT           0.384 ms   peak ?
