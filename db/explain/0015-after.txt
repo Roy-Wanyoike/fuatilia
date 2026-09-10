@@ -1,0 +1,314 @@
+# EXPLAIN ANALYZE evidence — 0015 read-model indexes (issue #137)
+# tag:      after
+# server:  PostgreSQL 16.4
+# fixture: 19000 | 20000 | 25000 | 3000 | 8566 | 821 | 12000 | 1752  (receivables_main_org | receivables_all | payments_all | cases_all | allocations_live | role_assignments | webhook_deliveries | promises_open)
+# params:  org=a1370000-0000-4000-8000-000000000001 payment=a1370000-0000-4000-8000-00000000a3d2 case=a1370000-0000-4000-8000-0000000129ea user=a1370000-0000-4000-8000-000000000004 receivables=2
+
+======================================================================================
+Q1  GET /v1/receivables — first page, default sort (limit 25, offset 0)
+    repo: repositories.ReceivablesByOrg (sortCol="created_at", asc)
+Limit  (cost=0.41..2.99 rows=25 width=227) (actual time=0.015..0.044 rows=25 loops=1)
+  Buffers: shared hit=26
+  ->  Index Scan using idx_receivables_org_created on receivables  (cost=0.41..1960.82 rows=19000 width=227) (actual time=0.014..0.041 rows=25 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=26
+Planning Time: 0.086 ms
+Execution Time: 0.060 ms
+
+======================================================================================
+Q1b  GET /v1/receivables — deep page (offset 15000) + org count(*)
+    repo: repositories.ReceivablesByOrg + count
+Limit  (cost=1548.11..1550.69 rows=25 width=227) (actual time=7.391..7.404 rows=25 loops=1)
+  Buffers: shared hit=14611
+  ->  Index Scan using idx_receivables_org_created on receivables  (cost=0.41..1960.82 rows=19000 width=227) (actual time=0.008..6.936 rows=15025 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=14611
+Planning Time: 0.076 ms
+Execution Time: 7.419 ms
+
+======================================================================================
+Q1c  GET /v1/receivables — the paginatedMeta total
+    repo: repositories.ReceivablesByOrg count
+Aggregate  (cost=472.29..472.30 rows=1 width=8) (actual time=1.855..1.855 rows=1 loops=1)
+  Buffers: shared hit=22
+  ->  Index Only Scan using idx_receivables_state on receivables  (cost=0.29..424.79 rows=19000 width=0) (actual time=0.012..0.986 rows=19000 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Heap Fetches: 0
+        Buffers: shared hit=22
+Planning Time: 0.028 ms
+Execution Time: 1.861 ms
+
+======================================================================================
+Q2  GET /v1/receivables?sort=dueDate&order=desc — whitelisted sort
+    repo: repositories.ReceivablesByOrg (sortCol="due_date", desc)
+Limit  (cost=4.94..8.48 rows=25 width=227) (actual time=0.325..0.329 rows=25 loops=1)
+  Buffers: shared hit=50
+  ->  Incremental Sort  (cost=4.94..2696.90 rows=19000 width=227) (actual time=0.324..0.326 rows=25 loops=1)
+        Sort Key: due_date DESC, id
+        Presorted Key: due_date
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 37kB  Peak Memory: 37kB
+        Buffers: shared hit=50
+        ->  Index Scan Backward using idx_receivables_org_due on receivables  (cost=0.41..1960.82 rows=19000 width=227) (actual time=0.005..0.040 rows=48 loops=1)
+              Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Buffers: shared hit=50
+Planning Time: 0.050 ms
+Execution Time: 0.339 ms
+
+======================================================================================
+Q3  GET /v1/payments — first page, default sort (limit 25, offset 0)
+    repo: repositories.PaymentsByOrg
+Limit  (cost=0.41..3.10 rows=25 width=238) (actual time=0.005..0.018 rows=25 loops=1)
+  Buffers: shared hit=27
+  ->  Index Scan using idx_payments_org_created on payments  (cost=0.41..2578.16 rows=24000 width=238) (actual time=0.005..0.016 rows=25 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=27
+Planning Time: 0.041 ms
+Execution Time: 0.030 ms
+
+======================================================================================
+Q3b  GET /v1/payments — deep page (offset 20000), default sort
+    repo: repositories.PaymentsByOrg
+Limit  (cost=2148.54..2151.22 rows=25 width=238) (actual time=9.945..9.964 rows=25 loops=1)
+  Buffers: shared hit=19426
+  ->  Index Scan using idx_payments_org_created on payments  (cost=0.41..2578.16 rows=24000 width=238) (actual time=0.009..9.339 rows=20025 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=19426
+Planning Time: 0.078 ms
+Execution Time: 9.981 ms
+
+======================================================================================
+Q3d  GET /v1/payments?sort=initiatedAt&order=desc — whitelisted sort
+    repo: repositories.PaymentsByOrg (sortCol="initiated_at", desc)
+Limit  (cost=5.26..8.38 rows=25 width=230) (actual time=0.034..0.037 rows=25 loops=1)
+  Buffers: shared hit=47
+  ->  Incremental Sort  (cost=5.26..3001.41 rows=24000 width=230) (actual time=0.034..0.035 rows=25 loops=1)
+        Sort Key: initiated_at DESC, id
+        Presorted Key: initiated_at
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+        Buffers: shared hit=47
+        ->  Index Scan Backward using idx_payments_initiated_at on payments  (cost=0.29..2034.04 rows=24000 width=230) (actual time=0.002..0.017 rows=46 loops=1)
+              Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Buffers: shared hit=47
+Planning Time: 0.041 ms
+Execution Time: 0.044 ms
+
+======================================================================================
+Q3c  GET /v1/payments — the paginatedMeta total
+    repo: repositories.PaymentsByOrg count
+Aggregate  (cost=576.29..576.30 rows=1 width=8) (actual time=2.339..2.339 rows=1 loops=1)
+  Buffers: shared hit=25
+  ->  Index Only Scan using idx_payments_state on payments  (cost=0.29..516.29 rows=24000 width=0) (actual time=0.005..1.254 rows=24000 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Heap Fetches: 0
+        Buffers: shared hit=25
+Planning Time: 0.053 ms
+Execution Time: 2.347 ms
+
+======================================================================================
+Q4  GET /v1/payments/:paymentId — the payment row
+    repo: repositories.PaymentByID
+Index Scan using uq_payments_org_id on payments  (cost=0.29..8.31 rows=1 width=230) (actual time=0.002..0.002 rows=1 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.028 ms
+Execution Time: 0.006 ms
+
+======================================================================================
+Q4b  GET /v1/payments/:paymentId — live allocations (ordered)
+    repo: repositories.AllocationsForPayment (+ CommittedAgainstPayment input)
+Incremental Sort  (cost=8.33..8.37 rows=2 width=84) (actual time=0.009..0.009 rows=1 loops=1)
+  Sort Key: allocated_at, ((id)::text)
+  Presorted Key: allocated_at
+  Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+  Buffers: shared hit=3
+  ->  Index Scan using idx_allocations_payment_live on allocations  (cost=0.29..8.32 rows=1 width=84) (actual time=0.006..0.006 rows=1 loops=1)
+        Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (source_type = 'payment'::allocation_source) AND (source_id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+        Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.061 ms
+Execution Time: 0.017 ms
+
+======================================================================================
+Q4c  GET /v1/payments/:paymentId — refund reservations (ordered)
+    repo: repositories.RefundsForPayment
+Sort  (cost=8.31..8.32 rows=1 width=104) (actual time=0.002..0.002 rows=0 loops=1)
+  Sort Key: created_at, ((id)::text)
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=2
+  ->  Index Scan using idx_refunds_payment on refunds  (cost=0.28..8.30 rows=1 width=104) (actual time=0.001..0.002 rows=0 loops=1)
+        Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (payment_id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+        Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.034 ms
+Execution Time: 0.007 ms
+
+======================================================================================
+Q5  GET /v1/collections/cases — first page, default sort (limit 25, offset 0)
+    repo: repositories.CasesByOrg
+Limit  (cost=0.28..2.73 rows=25 width=119) (actual time=0.003..0.012 rows=25 loops=1)
+  Buffers: shared hit=27
+  ->  Index Scan using idx_collections_cases_org_created on collections_cases  (cost=0.28..279.15 rows=2850 width=119) (actual time=0.003..0.010 rows=25 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=27
+Planning Time: 0.027 ms
+Execution Time: 0.018 ms
+
+======================================================================================
+Q5b  GET /v1/collections/cases — deep page (offset 2500), default sort
+    repo: repositories.CasesByOrg
+Limit  (cost=244.91..247.35 rows=25 width=119) (actual time=0.787..0.796 rows=25 loops=1)
+  Buffers: shared hit=2437
+  ->  Index Scan using idx_collections_cases_org_created on collections_cases  (cost=0.28..279.15 rows=2850 width=119) (actual time=0.004..0.717 rows=2525 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Buffers: shared hit=2437
+Planning Time: 0.041 ms
+Execution Time: 0.805 ms
+
+======================================================================================
+Q6  GET /v1/collections/cases/:caseId — the case row
+    repo: repositories.CaseByID
+Index Scan using uq_collections_cases_org_id on collections_cases  (cost=0.28..8.30 rows=1 width=111) (actual time=0.002..0.002 rows=1 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (id = 'a1370000-0000-4000-8000-0000000129ea'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.024 ms
+Execution Time: 0.006 ms
+
+======================================================================================
+Q6b  GET /v1/collections/cases/:caseId — append-only action log
+    repo: repositories.CaseActionLog
+Index Scan using uq_case_actions_seq on case_actions  (cost=0.29..11.88 rows=3 width=178) (actual time=0.011..0.012 rows=2 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (case_id = 'a1370000-0000-4000-8000-0000000129ea'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.058 ms
+Execution Time: 0.021 ms
+
+======================================================================================
+Q6c  GET /v1/collections/cases/:caseId — pending-promise overlay
+    repo: repositories.CaseHasPendingPromise
+Result  (cost=8.58..8.59 rows=1 width=1) (actual time=0.003..0.003 rows=1 loops=1)
+  Buffers: shared hit=4
+  InitPlan 1 (returns $0)
+    ->  Index Only Scan using idx_promises_receivable_open on promises  (cost=0.28..8.58 rows=1 width=0) (actual time=0.002..0.003 rows=0 loops=1)
+          Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (receivable_id = ANY ('{a1370000-0000-4000-8000-00000000466d,a1370000-0000-4000-8000-000000005b29}'::uuid[])))
+          Heap Fetches: 0
+          Buffers: shared hit=4
+Planning Time: 0.064 ms
+Execution Time: 0.008 ms
+
+======================================================================================
+Q7  AUTH HOT PATH (every authenticated request) — grant projection anti-join
+    repo: repositories.AuthStore.ActiveRulesForUser
+Nested Loop  (cost=12.15..17.65 rows=2 width=119) (actual time=0.025..0.028 rows=2 loops=1)
+  Join Filter: (r.id = ra.role_id)
+  Rows Removed by Join Filter: 4
+  Buffers: shared hit=6
+  ->  Seq Scan on roles r  (cost=0.00..1.07 rows=3 width=135) (actual time=0.002..0.003 rows=3 loops=1)
+        Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Rows Removed by Filter: 3
+        Buffers: shared hit=1
+  ->  Materialize  (cost=12.15..16.49 rows=2 width=48) (actual time=0.007..0.008 rows=2 loops=3)
+        Buffers: shared hit=5
+        ->  Merge Anti Join  (cost=12.15..16.48 rows=2 width=48) (actual time=0.012..0.014 rows=2 loops=1)
+              Merge Cond: (ra.id = rv.revoked_grant_id)
+              Buffers: shared hit=5
+              ->  Sort  (cost=12.00..12.01 rows=3 width=64) (actual time=0.005..0.005 rows=3 loops=1)
+                    Sort Key: ra.id
+                    Sort Method: quicksort  Memory: 25kB
+                    Buffers: shared hit=3
+                    ->  Index Scan using idx_role_assignments_user on role_assignments ra  (cost=0.28..11.98 rows=3 width=64) (actual time=0.002..0.003 rows=3 loops=1)
+                          Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (user_id = 'a1370000-0000-4000-8000-000000000004'::uuid) AND (kind = 'grant'::role_grant_kind))
+                          Buffers: shared hit=3
+              ->  Index Only Scan using idx_role_assignments_revoked_grant on role_assignments rv  (cost=0.14..11.97 rows=821 width=16) (actual time=0.006..0.007 rows=4 loops=1)
+                    Heap Fetches: 0
+                    Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.120 ms
+Execution Time: 0.038 ms
+
+======================================================================================
+Q8  WEBHOOK WORKER ClaimDue — cross-org claim, FOR UPDATE SKIP LOCKED
+    repo: webhooks.Store.ClaimDue (claimDueSQL, lease=15m)
+Limit  (cost=544.29..544.30 rows=1 width=273) (actual time=1.864..1.867 rows=1 loops=1)
+  Buffers: shared hit=280
+  ->  LockRows  (cost=544.29..563.50 rows=1537 width=273) (actual time=1.863..1.866 rows=1 loops=1)
+        Buffers: shared hit=280
+        ->  Sort  (cost=544.29..548.13 rows=1537 width=273) (actual time=1.854..1.856 rows=1 loops=1)
+              Sort Key: (COALESCE(d.next_attempt_at, d.created_at)), d.created_at, d.id
+              Sort Method: quicksort  Memory: 255kB
+              Buffers: shared hit=278
+              ->  Hash Join  (cost=88.54..536.61 rows=1537 width=273) (actual time=0.081..1.610 rows=674 loops=1)
+                    Hash Cond: ((d.org_id = e.org_id) AND (d.endpoint_id = e.id))
+                    Buffers: shared hit=278
+                    ->  Bitmap Heap Scan on webhook_deliveries d  (cost=87.48..475.60 rows=2306 width=162) (actual time=0.063..0.492 rows=674 loops=1)
+                          Recheck Cond: (((COALESCE(next_attempt_at, created_at) <= now()) AND (state = ANY ('{queued,failed}'::webhook_state[]))) OR ((updated_at <= (now() - '00:15:00'::interval)) AND (state = 'delivering'::webhook_state)))
+                          Filter: (((state = ANY ('{queued,failed}'::webhook_state[])) AND (COALESCE(next_attempt_at, created_at) <= now())) OR ((state = 'delivering'::webhook_state) AND (updated_at <= (now() - '00:15:00'::interval))))
+                          Heap Blocks: exact=271
+                          Buffers: shared hit=277
+                          ->  BitmapOr  (cost=87.48..87.48 rows=2368 width=0) (actual time=0.038..0.039 rows=0 loops=1)
+                                Buffers: shared hit=6
+                                ->  Bitmap Index Scan on idx_webhook_deliveries_claim_due  (cost=0.00..67.24 rows=1994 width=0) (actual time=0.016..0.016 rows=300 loops=1)
+                                      Index Cond: (COALESCE(next_attempt_at, created_at) <= now())
+                                      Buffers: shared hit=3
+                                ->  Bitmap Index Scan on idx_webhook_deliveries_claim_lease  (cost=0.00..19.08 rows=374 width=0) (actual time=0.021..0.022 rows=374 loops=1)
+                                      Index Cond: (updated_at <= (now() - '00:15:00'::interval))
+                                      Buffers: shared hit=3
+                    ->  Hash  (cost=1.03..1.03 rows=2 width=87) (actual time=0.006..0.006 rows=2 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=1
+                          ->  Seq Scan on webhook_endpoints e  (cost=0.00..1.03 rows=2 width=87) (actual time=0.003..0.004 rows=2 loops=1)
+                                Filter: active
+                                Rows Removed by Filter: 1
+                                Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=4
+Planning Time: 0.226 ms
+Execution Time: 1.900 ms
+
+======================================================================================
+CTX  CONTEXT (unchanged by 0015) — audit chain head per consequential command
+    repo: infra.appendAuditTx
+Aggregate  (cost=1887.79..1887.80 rows=1 width=40) (actual time=7.976..7.978 rows=1 loops=1)
+  Buffers: shared hit=842
+  InitPlan 1 (returns $0)
+    ->  Limit  (cost=1086.00..1086.00 rows=1 width=73) (actual time=5.200..5.201 rows=1 loops=1)
+          Buffers: shared hit=741
+          ->  Sort  (cost=1086.00..1133.50 rows=19000 width=73) (actual time=5.199..5.200 rows=1 loops=1)
+                Sort Key: audit_events_1.seq DESC
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=741
+                ->  Seq Scan on audit_events audit_events_1  (cost=0.00..991.00 rows=19000 width=73) (actual time=0.006..2.963 rows=19000 loops=1)
+                      Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+                      Rows Removed by Filter: 1000
+                      Buffers: shared hit=741
+  ->  Index Only Scan using uq_audit_events_org_seq on audit_events  (cost=0.29..754.29 rows=19000 width=8) (actual time=0.013..1.798 rows=19000 loops=1)
+        Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+        Rows Removed by Filter: 1000
+        Heap Fetches: 0
+        Buffers: shared hit=101
+Planning Time: 0.107 ms
+Execution Time: 7.994 ms
+
+======================================================================================
+SUMMARY (after) — execution time after warm-up
+  Q1     0.060 ms   peak ?
+  Q1b    7.419 ms   peak ?
+  Q1c    1.861 ms   peak ?
+  Q2     0.339 ms   peak ?
+  Q3     0.030 ms   peak ?
+  Q3b    9.981 ms   peak ?
+  Q3d    0.044 ms   peak ?
+  Q3c    2.347 ms   peak ?
+  Q4     0.006 ms   peak ?
+  Q4b    0.017 ms   peak ?
+  Q4c    0.007 ms   peak ?
+  Q5     0.018 ms   peak ?
+  Q5b    0.805 ms   peak ?
+  Q6     0.006 ms   peak ?
+  Q6b    0.021 ms   peak ?
+  Q6c    0.008 ms   peak ?
+  Q7     0.038 ms   peak ?
+  Q8     1.900 ms   peak ?
+  CTX    7.994 ms   peak ?

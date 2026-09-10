@@ -59,6 +59,35 @@ class PgError extends Error {
   }
 }
 
+/** RowDescription ('T'): column names only (the rest of each field descriptor is skipped). */
+function parseRowDescription(body, out) {
+  const nfields = body.readInt16BE(0);
+  let p = 2;
+  for (let i = 0; i < nfields; i++) {
+    let end = body.indexOf(0, p);
+    out.push(body.subarray(p, end).toString('utf8'));
+    p = end + 1 + 4 + 2 + 4 + 2 + 4 + 2; // name\0 | tableOID | attnum | typeOID | typlen | typmod | format
+  }
+}
+
+/** DataRow ('D'): text-format values; NULL arrives as length -1 → null. */
+function parseDataRow(body) {
+  const nfields = body.readInt16BE(0);
+  const row = new Array(nfields);
+  let p = 2;
+  for (let i = 0; i < nfields; i++) {
+    const len = body.readInt32BE(p);
+    p += 4;
+    if (len === -1) {
+      row[i] = null;
+    } else {
+      row[i] = body.subarray(p, p + len).toString('utf8');
+      p += len;
+    }
+  }
+  return row;
+}
+
 /**
  * Open a connection and run startup. Options: {host, port, user, database}.
  * Trust authentication is the only supported path by design.
@@ -144,11 +173,18 @@ function connect(opts) {
   });
 
   // --- simple query ---------------------------------------------------------
+  // Result shape: {tags, notices, fields, rows} — rows[] are the DataRow texts
+  // (null for NULL), fields[] the RowDescription column names. migrate/smoke
+  // consume tags/notices only; rows/fields exist for evidence tooling
+  // (db/explain_hot.cjs) and are additive — every statement still runs as one
+  // Query message in one implicit transaction.
   function query(sql) {
     return new Promise((resolve, reject) => {
       let qbuf = Buffer.alloc(0);
       const tags = [];
       const notices = [];
+      const fields = [];
+      const rows = [];
       let lastError = null;
       let done = false;
       const finish = (fn, arg) => {
@@ -177,14 +213,19 @@ function connect(opts) {
             case 'Z': {
               // ReadyForQuery — the whole Query message is done.
               if (lastError) finish(reject, lastError);
-              else finish(resolve, { tags, notices });
+              else finish(resolve, { tags, notices, fields, rows });
               return;
             }
             case 'S':
             case 'K':
-            case 'T':
-            case 'D':
-              break; // ParameterStatus/BackendKeyData/RowDescription/DataRow — not consumed
+              break; // ParameterStatus / BackendKeyData
+            case 'T': // RowDescription — column names
+              fields.length = 0;
+              parseRowDescription(msg.body, fields);
+              break;
+            case 'D': // DataRow — text-format values (simple query protocol)
+              rows.push(parseDataRow(msg.body));
+              break;
             default:
               finish(reject, new Error(`unexpected message ${msg.type} during query`));
               return;

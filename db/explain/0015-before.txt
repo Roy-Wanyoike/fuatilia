@@ -1,0 +1,332 @@
+# EXPLAIN ANALYZE evidence — 0015 read-model indexes (issue #137)
+# tag:      before
+# server:  PostgreSQL 16.4
+# fixture: 19000 | 20000 | 25000 | 3000 | 8566 | 821 | 12000 | 1752  (receivables_main_org | receivables_all | payments_all | cases_all | allocations_live | role_assignments | webhook_deliveries | promises_open)
+# params:  org=a1370000-0000-4000-8000-000000000001 payment=a1370000-0000-4000-8000-00000000a3d2 case=a1370000-0000-4000-8000-0000000129ea user=a1370000-0000-4000-8000-000000000004 receivables=2
+
+======================================================================================
+Q1  GET /v1/receivables — first page, default sort (limit 25, offset 0)
+    repo: repositories.ReceivablesByOrg (sortCol="created_at", asc)
+Limit  (cost=1251.17..1251.23 rows=25 width=227) (actual time=9.278..9.282 rows=25 loops=1)
+  Buffers: shared hit=465
+  ->  Sort  (cost=1251.17..1298.67 rows=19000 width=227) (actual time=9.277..9.278 rows=25 loops=1)
+        Sort Key: created_at, id
+        Sort Method: top-N heapsort  Memory: 36kB
+        Buffers: shared hit=465
+        ->  Seq Scan on receivables  (cost=0.00..715.00 rows=19000 width=227) (actual time=0.008..4.662 rows=19000 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 1000
+              Buffers: shared hit=465
+Planning Time: 0.077 ms
+Execution Time: 9.301 ms
+
+======================================================================================
+Q1b  GET /v1/receivables — deep page (offset 15000) + org count(*)
+    repo: repositories.ReceivablesByOrg + count
+Limit  (cost=2165.63..2165.69 rows=25 width=227) (actual time=19.084..19.090 rows=25 loops=1)
+  Buffers: shared hit=465, temp read=328 written=349
+  ->  Sort  (cost=2128.13..2175.63 rows=19000 width=227) (actual time=16.900..18.611 rows=15025 loops=1)
+        Sort Key: created_at, id
+        Sort Method: external merge  Disk: 2784kB
+        Buffers: shared hit=465, temp read=328 written=349
+        ->  Seq Scan on receivables  (cost=0.00..715.00 rows=19000 width=227) (actual time=0.006..4.567 rows=19000 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 1000
+              Buffers: shared hit=465
+Planning Time: 0.085 ms
+Execution Time: 19.716 ms
+
+======================================================================================
+Q1c  GET /v1/receivables — the paginatedMeta total
+    repo: repositories.ReceivablesByOrg count
+Aggregate  (cost=472.29..472.30 rows=1 width=8) (actual time=1.863..1.863 rows=1 loops=1)
+  Buffers: shared hit=22
+  ->  Index Only Scan using idx_receivables_state on receivables  (cost=0.29..424.79 rows=19000 width=0) (actual time=0.005..0.983 rows=19000 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Heap Fetches: 0
+        Buffers: shared hit=22
+Planning Time: 0.034 ms
+Execution Time: 1.871 ms
+
+======================================================================================
+Q2  GET /v1/receivables?sort=dueDate&order=desc — whitelisted sort
+    repo: repositories.ReceivablesByOrg (sortCol="due_date", desc)
+Limit  (cost=1251.17..1251.23 rows=25 width=227) (actual time=8.883..8.887 rows=25 loops=1)
+  Buffers: shared hit=465
+  ->  Sort  (cost=1251.17..1298.67 rows=19000 width=227) (actual time=8.882..8.884 rows=25 loops=1)
+        Sort Key: due_date DESC, id
+        Sort Method: top-N heapsort  Memory: 36kB
+        Buffers: shared hit=465
+        ->  Seq Scan on receivables  (cost=0.00..715.00 rows=19000 width=227) (actual time=0.005..4.471 rows=19000 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 1000
+              Buffers: shared hit=465
+Planning Time: 0.359 ms
+Execution Time: 8.903 ms
+
+======================================================================================
+Q3  GET /v1/payments — first page, default sort (limit 25, offset 0)
+    repo: repositories.PaymentsByOrg
+Limit  (cost=1623.76..1623.83 rows=25 width=238) (actual time=12.221..12.225 rows=25 loops=1)
+  Buffers: shared hit=634
+  ->  Sort  (cost=1623.76..1683.76 rows=24000 width=238) (actual time=12.220..12.221 rows=25 loops=1)
+        Sort Key: created_at, id
+        Sort Method: top-N heapsort  Memory: 35kB
+        Buffers: shared hit=634
+        ->  Seq Scan on payments  (cost=0.00..946.50 rows=24000 width=238) (actual time=0.004..5.702 rows=24000 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 1000
+              Buffers: shared hit=634
+Planning Time: 0.085 ms
+Execution Time: 12.244 ms
+
+======================================================================================
+Q3b  GET /v1/payments — deep page (offset 20000), default sort
+    repo: repositories.PaymentsByOrg
+Limit  (cost=5451.59..5451.65 rows=25 width=238) (actual time=27.121..27.127 rows=25 loops=1)
+  Buffers: shared hit=634, temp read=525 written=526
+  ->  Sort  (cost=5401.59..5461.59 rows=24000 width=238) (actual time=23.962..26.497 rows=20025 loops=1)
+        Sort Key: created_at, id
+        Sort Method: external merge  Disk: 4200kB
+        Buffers: shared hit=634, temp read=525 written=526
+        ->  Seq Scan on payments  (cost=0.00..946.50 rows=24000 width=238) (actual time=0.006..5.877 rows=24000 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 1000
+              Buffers: shared hit=634
+Planning Time: 0.095 ms
+Execution Time: 28.118 ms
+
+======================================================================================
+Q3d  GET /v1/payments?sort=initiatedAt&order=desc — whitelisted sort
+    repo: repositories.PaymentsByOrg (sortCol="initiated_at", desc)
+Limit  (cost=5.26..8.38 rows=25 width=230) (actual time=0.044..0.047 rows=25 loops=1)
+  Buffers: shared hit=47
+  ->  Incremental Sort  (cost=5.26..3001.41 rows=24000 width=230) (actual time=0.044..0.045 rows=25 loops=1)
+        Sort Key: initiated_at DESC, id
+        Presorted Key: initiated_at
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 36kB  Peak Memory: 36kB
+        Buffers: shared hit=47
+        ->  Index Scan Backward using idx_payments_initiated_at on payments  (cost=0.29..2034.04 rows=24000 width=230) (actual time=0.003..0.024 rows=46 loops=1)
+              Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Buffers: shared hit=47
+Planning Time: 0.035 ms
+Execution Time: 0.055 ms
+
+======================================================================================
+Q3c  GET /v1/payments — the paginatedMeta total
+    repo: repositories.PaymentsByOrg count
+Aggregate  (cost=576.29..576.30 rows=1 width=8) (actual time=2.307..2.307 rows=1 loops=1)
+  Buffers: shared hit=25
+  ->  Index Only Scan using idx_payments_state on payments  (cost=0.29..516.29 rows=24000 width=0) (actual time=0.004..1.221 rows=24000 loops=1)
+        Index Cond: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+        Heap Fetches: 0
+        Buffers: shared hit=25
+Planning Time: 0.029 ms
+Execution Time: 2.314 ms
+
+======================================================================================
+Q4  GET /v1/payments/:paymentId — the payment row
+    repo: repositories.PaymentByID
+Index Scan using uq_payments_org_id on payments  (cost=0.29..8.31 rows=1 width=230) (actual time=0.004..0.005 rows=1 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.043 ms
+Execution Time: 0.012 ms
+
+======================================================================================
+Q4b  GET /v1/payments/:paymentId — live allocations (ordered)
+    repo: repositories.AllocationsForPayment (+ CommittedAgainstPayment input)
+Sort  (cost=8.33..8.33 rows=1 width=84) (actual time=0.005..0.005 rows=1 loops=1)
+  Sort Key: allocated_at, ((id)::text)
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=3
+  ->  Index Scan using uq_allocations_replay on allocations  (cost=0.29..8.32 rows=1 width=84) (actual time=0.003..0.004 rows=1 loops=1)
+        Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (source_type = 'payment'::allocation_source) AND (source_id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+        Filter: (reversed_at IS NULL)
+        Buffers: shared hit=3
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.040 ms
+Execution Time: 0.010 ms
+
+======================================================================================
+Q4c  GET /v1/payments/:paymentId — refund reservations (ordered)
+    repo: repositories.RefundsForPayment
+Sort  (cost=8.31..8.32 rows=1 width=104) (actual time=0.005..0.005 rows=0 loops=1)
+  Sort Key: created_at, ((id)::text)
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=2
+  ->  Index Scan using idx_refunds_payment on refunds  (cost=0.28..8.30 rows=1 width=104) (actual time=0.004..0.004 rows=0 loops=1)
+        Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (payment_id = 'a1370000-0000-4000-8000-00000000a3d2'::uuid))
+        Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=1
+Planning Time: 0.020 ms
+Execution Time: 0.010 ms
+
+======================================================================================
+Q5  GET /v1/collections/cases — first page, default sort (limit 25, offset 0)
+    repo: repositories.CasesByOrg
+Limit  (cost=176.92..176.99 rows=25 width=119) (actual time=1.065..1.068 rows=25 loops=1)
+  Buffers: shared hit=59
+  ->  Sort  (cost=176.92..184.05 rows=2850 width=119) (actual time=1.065..1.066 rows=25 loops=1)
+        Sort Key: created_at, id
+        Sort Method: top-N heapsort  Memory: 33kB
+        Buffers: shared hit=59
+        ->  Seq Scan on collections_cases  (cost=0.00..96.50 rows=2850 width=119) (actual time=0.005..0.521 rows=2850 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 150
+              Buffers: shared hit=59
+Planning Time: 0.078 ms
+Execution Time: 1.081 ms
+
+======================================================================================
+Q5b  GET /v1/collections/cases — deep page (offset 2500), default sort
+    repo: repositories.CasesByOrg
+Limit  (cost=266.29..266.36 rows=25 width=119) (actual time=1.547..1.551 rows=25 loops=1)
+  Buffers: shared hit=59
+  ->  Sort  (cost=260.04..267.17 rows=2850 width=119) (actual time=1.372..1.472 rows=2525 loops=1)
+        Sort Key: created_at, id
+        Sort Method: quicksort  Memory: 612kB
+        Buffers: shared hit=59
+        ->  Seq Scan on collections_cases  (cost=0.00..96.50 rows=2850 width=119) (actual time=0.003..0.500 rows=2850 loops=1)
+              Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+              Rows Removed by Filter: 150
+              Buffers: shared hit=59
+Planning Time: 0.045 ms
+Execution Time: 1.562 ms
+
+======================================================================================
+Q6  GET /v1/collections/cases/:caseId — the case row
+    repo: repositories.CaseByID
+Index Scan using uq_collections_cases_org_id on collections_cases  (cost=0.28..8.30 rows=1 width=111) (actual time=0.005..0.005 rows=1 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (id = 'a1370000-0000-4000-8000-0000000129ea'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.039 ms
+Execution Time: 0.011 ms
+
+======================================================================================
+Q6b  GET /v1/collections/cases/:caseId — append-only action log
+    repo: repositories.CaseActionLog
+Index Scan using uq_case_actions_seq on case_actions  (cost=0.29..11.88 rows=3 width=178) (actual time=0.003..0.004 rows=2 loops=1)
+  Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (case_id = 'a1370000-0000-4000-8000-0000000129ea'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.033 ms
+Execution Time: 0.009 ms
+
+======================================================================================
+Q6c  GET /v1/collections/cases/:caseId — pending-promise overlay
+    repo: repositories.CaseHasPendingPromise
+Result  (cost=122.00..122.01 rows=1 width=1) (actual time=0.236..0.236 rows=1 loops=1)
+  Buffers: shared hit=62
+  InitPlan 1 (returns $0)
+    ->  Seq Scan on promises  (cost=0.00..122.00 rows=1 width=0) (actual time=0.235..0.235 rows=0 loops=1)
+          Filter: ((receivable_id = ANY ('{a1370000-0000-4000-8000-00000000466d,a1370000-0000-4000-8000-000000005b29}'::uuid[])) AND (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (state = ANY ('{created,pending,partially_fulfilled}'::promise_state[])))
+          Rows Removed by Filter: 3200
+          Buffers: shared hit=62
+Planning Time: 0.049 ms
+Execution Time: 0.240 ms
+
+======================================================================================
+Q7  AUTH HOT PATH (every authenticated request) — grant projection anti-join
+    repo: repositories.AuthStore.ActiveRulesForUser
+Hash Right Anti Join  (cost=13.23..41.53 rows=2 width=119) (actual time=0.117..0.120 rows=2 loops=1)
+  Hash Cond: (rv.revoked_grant_id = ra.id)
+  Buffers: shared hit=21
+  ->  Seq Scan on role_assignments rv  (cost=0.00..25.21 rows=821 width=16) (actual time=0.001..0.039 rows=821 loops=1)
+        Buffers: shared hit=17
+  ->  Hash  (cost=13.20..13.20 rows=3 width=135) (actual time=0.026..0.027 rows=3 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        Buffers: shared hit=4
+        ->  Nested Loop  (cost=0.28..13.20 rows=3 width=135) (actual time=0.023..0.026 rows=3 loops=1)
+              Join Filter: (ra.role_id = r.id)
+              Rows Removed by Join Filter: 3
+              Buffers: shared hit=4
+              ->  Index Scan using idx_role_assignments_user on role_assignments ra  (cost=0.28..11.98 rows=3 width=64) (actual time=0.002..0.003 rows=3 loops=1)
+                    Index Cond: ((org_id = 'a1370000-0000-4000-8000-000000000001'::uuid) AND (user_id = 'a1370000-0000-4000-8000-000000000004'::uuid) AND (kind = 'grant'::role_grant_kind))
+                    Buffers: shared hit=3
+              ->  Materialize  (cost=0.00..1.09 rows=3 width=135) (actual time=0.006..0.007 rows=2 loops=3)
+                    Buffers: shared hit=1
+                    ->  Seq Scan on roles r  (cost=0.00..1.07 rows=3 width=135) (actual time=0.002..0.003 rows=3 loops=1)
+                          Filter: (org_id = 'a1370000-0000-4000-8000-000000000001'::uuid)
+                          Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.111 ms
+Execution Time: 0.131 ms
+
+======================================================================================
+Q8  WEBHOOK WORKER ClaimDue — cross-org claim, FOR UPDATE SKIP LOCKED
+    repo: webhooks.Store.ClaimDue (claimDueSQL, lease=15m)
+Limit  (cost=721.70..721.71 rows=1 width=273) (actual time=3.157..3.160 rows=1 loops=1)
+  Buffers: shared hit=326
+  ->  LockRows  (cost=721.70..740.91 rows=1537 width=273) (actual time=3.157..3.158 rows=1 loops=1)
+        Buffers: shared hit=326
+        ->  Sort  (cost=721.70..725.54 rows=1537 width=273) (actual time=3.145..3.146 rows=1 loops=1)
+              Sort Key: (COALESCE(d.next_attempt_at, d.created_at)), d.created_at, d.id
+              Sort Method: quicksort  Memory: 255kB
+              Buffers: shared hit=324
+              ->  Hash Join  (cost=1.06..714.01 rows=1537 width=273) (actual time=0.015..2.934 rows=674 loops=1)
+                    Hash Cond: ((d.org_id = e.org_id) AND (d.endpoint_id = e.id))
+                    Buffers: shared hit=324
+                    ->  Seq Scan on webhook_deliveries d  (cost=0.00..653.00 rows=2306 width=162) (actual time=0.006..1.869 rows=674 loops=1)
+                          Filter: (((state = ANY ('{queued,failed}'::webhook_state[])) AND (COALESCE(next_attempt_at, created_at) <= now())) OR ((state = 'delivering'::webhook_state) AND (updated_at <= (now() - '00:15:00'::interval))))
+                          Rows Removed by Filter: 11326
+                          Buffers: shared hit=323
+                    ->  Hash  (cost=1.03..1.03 rows=2 width=87) (actual time=0.004..0.004 rows=2 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=1
+                          ->  Seq Scan on webhook_endpoints e  (cost=0.00..1.03 rows=2 width=87) (actual time=0.002..0.002 rows=2 loops=1)
+                                Filter: active
+                                Rows Removed by Filter: 1
+                                Buffers: shared hit=1
+Planning:
+  Buffers: shared hit=4
+Planning Time: 0.232 ms
+Execution Time: 3.187 ms
+
+======================================================================================
+CTX  CONTEXT (unchanged by 0015) — audit chain head per consequential command
+    repo: infra.appendAuditTx
+Aggregate  (cost=1887.79..1887.80 rows=1 width=40) (actual time=7.949..7.950 rows=1 loops=1)
+  Buffers: shared hit=842
+  InitPlan 1 (returns $0)
+    ->  Limit  (cost=1086.00..1086.00 rows=1 width=73) (actual time=5.199..5.200 rows=1 loops=1)
+          Buffers: shared hit=741
+          ->  Sort  (cost=1086.00..1133.50 rows=19000 width=73) (actual time=5.197..5.198 rows=1 loops=1)
+                Sort Key: audit_events_1.seq DESC
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=741
+                ->  Seq Scan on audit_events audit_events_1  (cost=0.00..991.00 rows=19000 width=73) (actual time=0.005..2.955 rows=19000 loops=1)
+                      Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+                      Rows Removed by Filter: 1000
+                      Buffers: shared hit=741
+  ->  Index Only Scan using uq_audit_events_org_seq on audit_events  (cost=0.29..754.29 rows=19000 width=8) (actual time=0.010..1.775 rows=19000 loops=1)
+        Filter: (NOT (org_id IS DISTINCT FROM 'a1370000-0000-4000-8000-000000000001'::uuid))
+        Rows Removed by Filter: 1000
+        Heap Fetches: 0
+        Buffers: shared hit=101
+Planning Time: 0.109 ms
+Execution Time: 7.970 ms
+
+======================================================================================
+SUMMARY (before) — execution time after warm-up
+  Q1     9.301 ms   peak ?
+  Q1b   19.716 ms   peak ?
+  Q1c    1.871 ms   peak ?
+  Q2     8.903 ms   peak ?
+  Q3    12.244 ms   peak ?
+  Q3b   28.118 ms   peak ?
+  Q3d    0.055 ms   peak ?
+  Q3c    2.314 ms   peak ?
+  Q4     0.012 ms   peak ?
+  Q4b    0.010 ms   peak ?
+  Q4c    0.010 ms   peak ?
+  Q5     1.081 ms   peak ?
+  Q5b    1.562 ms   peak ?
+  Q6     0.011 ms   peak ?
+  Q6b    0.009 ms   peak ?
+  Q6c    0.240 ms   peak ?
+  Q7     0.131 ms   peak ?
+  Q8     3.187 ms   peak ?
+  CTX    7.970 ms   peak ?
