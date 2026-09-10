@@ -19,7 +19,11 @@ const config: Config = {
         ink: {
           DEFAULT: '#0f172a',
           soft: '#475569',
-          faint: '#94a3b8',
+          // AA floor: #94a3b8 measured 2.56:1 on surface-raised (WCAG 1.4.3
+          // needs 4.5:1 for the text-xs roles this token fills). slate-500
+          // measures 4.76:1 on raised / 4.55:1 on surface — passes everywhere
+          // the token is used (never directly on surface-sunk).
+          faint: '#64748b',
         },
         accent: {
           DEFAULT: '#0f766e',

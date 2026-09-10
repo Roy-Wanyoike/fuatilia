@@ -569,7 +569,7 @@ function OpportunitiesCard({
       kind: 'loaded',
       content: (
         <div className="space-y-2">
-          <Table>
+          <Table aria-label="High-value opportunities">
             <THead>
               <TR>
                 <TH scope="col">Customer</TH>

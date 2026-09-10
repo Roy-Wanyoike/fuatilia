@@ -159,7 +159,7 @@ export default function PaymentsPage() {
             />
           )}
           {!paymentsQuery.isPending && refusal === null && !sourceEmpty && (
-            <Table>
+            <Table aria-label="Payments ledger">
               <THead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TR key={headerGroup.id}>
