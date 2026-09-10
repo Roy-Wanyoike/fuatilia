@@ -20,3 +20,43 @@ are the textual source of truth; these PNGs are the original rendered artifacts.
 | `d12_sm_promise.png` | PromiseToPay lifecycle (F12) | [03](../../03-state-machines.md) |
 | `d13_sm_installment.png` | Installment lifecycle (PaymentPlan, F7) | [03](../../03-state-machines.md) |
 | `d14_sm_dispute.png` | Dispute lifecycle (F16) | [03](../../03-state-machines.md) |
+| `d15_er_ops.png` | ER cluster — ops & platform tables (comms 0011, webhooks 0012, audit/outbox/idempotency 0013, crossborder 0014) | [05](../../05-data-dictionary.md) |
+
+## d15 — ops ER (issue #145)
+
+`d15_er_ops.mmd` is the committed **mermaid source**; `d15_er_ops.png` is the rendered artifact.
+Unlike d01–d14 (whose sources were not retained), d15 commits its source so the ERD is diffable
+and regenerable. The column/constraint truth for every entity is `db/migrations/0011..0014`,
+restated literally in [05 — Data dictionary](../../05-data-dictionary.md); the dictionary's
+zero-drift audit against the migration files is the coverage evidence.
+
+Reading notes:
+
+- **Tenant isolation (0001 convention)**: every entity carries `org_id`; children reference their
+  parent through the **composite foreign key `(org_id, parent_id)`** against the parent's
+  `uq_<table>_org_id` index — cross-tenant linkage is structurally impossible. Only domain roots
+  (`conversations`, `webhook_endpoints`, `audit_events`, `idempotency_keys`, `outbox_events`,
+  `crossborder_corridors`) draw the `orgs` edge; child tables reach orgs through their parent's
+  composite FK.
+- **`(logical)` edges** carry no DDL FK: `messages.consent_grant_id` (K2 consent citation, shape
+  enforced by `ck_messages_outbound_consent`), `webhook_deliveries.event_id` (domain event;
+  uniqueness `(org_id, endpoint_id, event_id)` makes enqueue idempotent),
+  `transfer_intents.quote_id` (the snapshot columns, frozen at authorization, carry the R10 truth).
+
+### Regenerating the PNG
+
+The existing d01–d14 pipeline is "mermaid → PNG via mermaid-cli". Reproduce d15 with:
+
+```bash
+npx @mermaid-js/mermaid-cli mmdc \
+  -i docs/design/diagrams/d15_er_ops.mmd \
+  -o docs/design/diagrams/d15_er_ops.png \
+  -b white -w 2800 -s 2 \
+  -p puppeteer-config.json   # {"args":["--no-sandbox","--disable-gpu"]}
+```
+
+Notes from this render: the bundled mermaid build rejects `%%` comments in diagram source (keep
+the `.mmd` pure; notes live here), YAML frontmatter must be the first thing in the file, and
+`-w 2800 -s 2` is what produced the committed 5568×2280 PNG (default width collapses the layout).
+`chrome-headless-shell` must be available to puppeteer (`npx puppeteer browsers install
+chrome-headless-shell`).
