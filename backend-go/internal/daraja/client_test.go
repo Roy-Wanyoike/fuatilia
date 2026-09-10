@@ -17,7 +17,10 @@ import (
 
 const (
 	testShortCode = "174379"
-	testPasskey   = "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
+	// Deliberately NOT the public sandbox passkey: real credentials never
+	// belong in code, even well-known demo ones — tests inject a placeholder
+	// and the service layer injects the passkey from its own secret source.
+	testPasskey = "test-passkey-not-a-secret"
 )
 
 // validSTKRequest is the shared happy-path initiation request.
@@ -402,7 +405,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		}})
 		c := f.client(t, nil)
 		rc, err := c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "BusinessPayment",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "BusinessPayment",
 			AmountMinor: 150_000, PartyB: "254712345678", Remarks: "supplier payout",
 			QueueTimeOutURL: "https://api.example.co.ke/b2c/timeout", ResultURL: "https://api.example.co.ke/b2c/result",
 			Occasion: "payout",
@@ -419,7 +422,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		oauthScript(f, "tok", "3600")
 		c := f.client(t, nil)
 		_, err := c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "GiftMoney",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "GiftMoney",
 			AmountMinor: 100, PartyB: "254712345678",
 		}, "k")
 		var de *Error
@@ -427,7 +430,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 			t.Fatalf("bad CommandID: want CONFIG_INVALID, got %v", err)
 		}
 		_, err = c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "BusinessPayment",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "BusinessPayment",
 			AmountMinor: 100_050, PartyB: "254712345678",
 		}, "k2")
 		if !errors.As(err, &de) || de.Code != CodeAmountNotWholeShilling {
@@ -438,7 +441,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		f := newFakeServer(t)
 		oauthScript(f, "tok", "3600")
 		c := f.client(t, nil)
-		_, err := c.QueryTransactionStatus(context.Background(), "SBX12345", "testapi", "cred", "https://x.example")
+		_, err := c.QueryTransactionStatus(context.Background(), "SBX12345", "test-initiator", "cred", "https://x.example")
 		var de *Error
 		if !errors.As(err, &de) || de.Code != CodeTransIDMalformed {
 			t.Fatalf("lowercase id must be refused, got %v", err)
@@ -447,7 +450,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 			"OriginatorConversationID": "o-1", "ConversationID": "c-1", "ResponseCode": "0",
 			"ResponseDescription": "ok",
 		}})
-		if _, err := c.QueryTransactionStatus(context.Background(), "SBK41XQ7RT", "testapi", "cred", "https://x.example"); err != nil {
+		if _, err := c.QueryTransactionStatus(context.Background(), "SBK41XQ7RT", "test-initiator", "cred", "https://x.example"); err != nil {
 			t.Fatalf("valid id: %v", err)
 		}
 	})
