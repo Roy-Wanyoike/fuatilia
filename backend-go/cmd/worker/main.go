@@ -12,13 +12,17 @@
 //
 // Configuration (environment; see internal/outbox/README.md for semantics):
 //
-//	DATABASE_URL          required — least-privilege relay role (SELECT/UPDATE
-//	                      on outbox_events only; grants in the outbox README)
-//	NATS_URL              default nats://127.0.0.1:4222 — credentials belong
-//	                      in the URL or NATS env, never in code or logs
-//	OUTBOX_BATCH          default 100  — max rows per org per cycle
-//	OUTBOX_POLL_INTERVAL  default 1s   — idle wait between cycles (Go duration)
-//	OUTBOX_MAX_ATTEMPTS   default 5    — publish attempts before poisoning
+//	DATABASE_URL           required — least-privilege relay role (SELECT/UPDATE
+//	                       on outbox_events only; grants in the outbox README)
+//	NATS_URL               default nats://127.0.0.1:4222 — credentials belong
+//	                       in the URL or NATS env, never in code or logs
+//	OUTBOX_BATCH           default 100  — max rows per org per cycle
+//	OUTBOX_POLL_INTERVAL   default 1s   — idle wait between cycles (Go duration)
+//	OUTBOX_MAX_ATTEMPTS    default 5    — publish attempts before poisoning
+//	FUATILIA_METRICS_ADDR  unset = off  — when set (e.g. ":9090"), serves the
+//	                       Prometheus exposition at /metrics on that address;
+//	                       the relay runs HERE, so the lag/DLQ series are
+//	                       exposed here, not on the api process
 //
 // Graceful shutdown: SIGTERM/SIGINT lets the in-flight org batch finish and
 // commit (the relay observes cancellation only between org batches), closes
@@ -34,6 +38,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -43,6 +49,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/observability"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/outbox"
 )
 
@@ -60,6 +67,7 @@ const (
 	envBatch        = "OUTBOX_BATCH"
 	envPollInterval = "OUTBOX_POLL_INTERVAL"
 	envMaxAttempts  = "OUTBOX_MAX_ATTEMPTS"
+	envMetricsAddr  = "FUATILIA_METRICS_ADDR"
 
 	defaultNATSURL = "nats://127.0.0.1:4222"
 )
@@ -68,6 +76,7 @@ const (
 type config struct {
 	databaseURL string
 	natsURL     string
+	metricsAddr string
 	relay       outbox.Config
 }
 
@@ -104,6 +113,15 @@ func loadConfig(getenv func(string) string) (config, error) {
 			return c, fmt.Errorf("%s must be a positive integer, got %q", envMaxAttempts, v)
 		}
 		c.relay.MaxAttempts = n
+	}
+	// Metrics exposition (issue #176): opt-in by address — a worker that
+	// never opens a port stays the zero-config default. Malformed values
+	// are boot failures, never silently ignored.
+	c.metricsAddr = getenv(envMetricsAddr)
+	if c.metricsAddr != "" {
+		if _, _, err := net.SplitHostPort(c.metricsAddr); err != nil {
+			return c, fmt.Errorf("%s must be a host:port address (e.g. :9090), got %q", envMetricsAddr, c.metricsAddr)
+		}
 	}
 	return c, nil
 }
@@ -205,6 +223,24 @@ func runRelay(logger *slog.Logger) int {
 	}
 	defer pool.Close()
 
+	// Observability wiring (issue #176): when the deployment gives the
+	// worker a scrape address, the relay feeds the fuatilia_ series —
+	// lag/DLQ gauges through the BacklogSource seam and the cycle
+	// counters — and the process serves them at /metrics beside the
+	// pool gauges. Without the address the relay runs metrics-free.
+	var metrics *observability.Metrics
+	var metricsServer *http.Server
+	if cfg.metricsAddr != "" {
+		metrics = observability.NewMetrics(observability.MetricsOptions{})
+		metrics.SetPoolSource(poolStatsSource(pool))
+		cfg.relay.Metrics = metrics
+		metricsServer = &http.Server{
+			Addr:              cfg.metricsAddr,
+			ReadHeaderTimeout: 5 * time.Second,
+			Handler:           metricsServeMux(metrics.Handler()),
+		}
+	}
+
 	nc, err := nats.Connect(cfg.natsURL,
 		nats.Name("fuatilia-outbox-relay"),
 		nats.MaxReconnects(-1), // a worker keeps retrying the broker forever
@@ -241,14 +277,60 @@ func runRelay(logger *slog.Logger) int {
 		"poll_interval_ms", cfg.relay.PollInterval.Milliseconds(),
 		"max_attempts", cfg.relay.MaxAttempts,
 	)
+	if metricsServer != nil {
+		go func() {
+			logger.Info("worker.metrics_listening", "addr", cfg.metricsAddr)
+			if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Error("worker.metrics_failed", "error", err.Error())
+			}
+		}()
+	}
 	if err := relay.Run(ctx); err != nil {
 		logger.Error("worker.relay_failed", "error", err.Error())
 		return exitFail
+	}
+	if metricsServer != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = metricsServer.Shutdown(shutdownCtx)
 	}
 	// Graceful drain complete: the in-flight batch committed, connections
 	// close via the defers above.
 	logger.Info("worker.stopped")
 	return exitOK
+}
+
+// poolStatsSource adapts the live pgxpool snapshot onto the observability
+// PoolStats port (the metrics package stays pgx-free by design).
+func poolStatsSource(pool *pgxpool.Pool) func() observability.PoolStats {
+	return func() observability.PoolStats {
+		s := pool.Stat()
+		return observability.PoolStats{
+			Acquired: s.AcquiredConns(),
+			Idle:     s.IdleConns(),
+			Total:    s.TotalConns(),
+			Max:      s.MaxConns(),
+		}
+	}
+}
+
+// metricsServeMux mounts the exposition at /metrics and nothing else —
+// GET/HEAD answer, any other method or path refuses (the scrape port is not
+// an API surface).
+func metricsServeMux(exposition http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL == nil || r.URL.Path != "/metrics" {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet, http.MethodHead:
+			exposition.ServeHTTP(w, r)
+		default:
+			w.Header().Set("Allow", "GET, HEAD")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
 }
 
 // runReplay is the one-shot mode: requeue the DLQ or a created_at range, log
