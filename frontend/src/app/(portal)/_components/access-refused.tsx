@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Refusal } from '@/lib/api/client';
+import { usePortalT } from '@/lib/portal-i18n/context';
 
 /**
  * The clean REFUSED surface for the payer portal (issue #86): rendered both
@@ -11,6 +12,9 @@ import type { Refusal } from '@/lib/api/client';
  * API answers 401/403 contract envelopes (session expired/revoked, or the
  * credential lacks the view's permission). It surfaces the contract code +
  * requestId — never invented copy pretending the data is merely "loading".
+ * The title/description are supplied (already localized) by the calling
+ * view; the component's own strings resolve through the portal i18n
+ * catalogs (issue #149).
  */
 
 /** True when a tagged refusal is an access refusal (401/403 status). */
@@ -41,6 +45,7 @@ export function AccessRefused({
   message,
 }: AccessRefusedProps) {
   const router = useRouter();
+  const t = usePortalT();
   const [signingOut, setSigningOut] = useState(false);
 
   async function returnToGate(): Promise<void> {
@@ -66,11 +71,11 @@ export function AccessRefused({
         <p className="text-xs text-ink-soft">{message}</p>
       )}
       <p className="font-mono text-xs text-ink-soft">
-        code: <span className="font-semibold">{code}</span>
+        {t('common.codeLabel')} <span className="font-semibold">{code}</span>
       </p>
       {requestId !== null && requestId.length > 0 && (
         <p className="font-mono text-xs text-ink-soft">
-          requestId: <span>{requestId}</span>
+          {t('common.requestIdLabel')} <span>{requestId}</span>
         </p>
       )}
       <Button
@@ -82,7 +87,7 @@ export function AccessRefused({
         }}
         disabled={signingOut}
       >
-        Return to access-code gate
+        {t('common.returnToGate')}
       </Button>
     </div>
   );

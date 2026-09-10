@@ -17,6 +17,8 @@ import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import type { FuatiliaClient } from '@/lib/api/client';
 import type { ReceivableView } from '@/lib/api/wire-types';
 import { portalClient } from '@/lib/portal/browser-client';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import type { LocaleKey } from '@/lib/portal-i18n/dictionary';
 import { formatMoney } from '@/lib/money';
 import { AccessRefused, isAccessRefusal } from './access-refused';
 
@@ -26,7 +28,10 @@ import { AccessRefused, isAccessRefusal } from './access-refused';
  * and balances in exact integer minor units. Server-driven cursor
  * pagination (the kernel's strict limit/cursor contract drives the
  * controls). Mobile-first: a stacked list under `md`, a table from `md` up —
- * same rows, same data, no fabricated mobile variant.
+ * same rows, same data, no fabricated mobile variant. All payer-facing
+ * strings resolve through the portal i18n catalogs (issue #149); the state
+ * badges are bound to the catalog with an exhaustive Record map, so a new
+ * wire state without a translation cannot compile.
  */
 
 const PAGE_SIZE = 20;
@@ -45,11 +50,25 @@ const STATE_TONES: Record<
   voided: 'neutral',
 };
 
+/** Every receivable state has exactly one localized badge label. */
+const STATE_LABEL_KEYS: Record<ReceivableView['state'], LocaleKey> = {
+  draft: 'states.draft',
+  open: 'states.open',
+  partially_paid: 'states.partially_paid',
+  settled: 'states.settled',
+  recovered: 'states.recovered',
+  written_off: 'states.written_off',
+  uncollectible: 'states.uncollectible',
+  voided: 'states.voided',
+};
+
 function StateBadge({ state }: { state: ReceivableView['state'] }) {
-  return <Badge tone={STATE_TONES[state]}>{state.replace(/_/g, ' ')}</Badge>;
+  const t = usePortalT();
+  return <Badge tone={STATE_TONES[state]}>{t(STATE_LABEL_KEYS[state])}</Badge>;
 }
 
 function AgingCell({ receivable }: { receivable: ReceivableView }) {
+  const t = usePortalT();
   const aging = receivable.aging;
   if (aging === null) {
     return <span className="text-ink-soft">—</span>;
@@ -61,20 +80,23 @@ function AgingCell({ receivable }: { receivable: ReceivableView }) {
       </Badge>
       <span className="text-xs text-ink-soft">
         {aging.daysPastDue > 0
-          ? `${aging.daysPastDue} day${aging.daysPastDue === 1 ? '' : 's'} past due`
-          : 'not past due'}
+          ? aging.daysPastDue === 1
+            ? t('invoices.dayPastDue', { days: aging.daysPastDue })
+            : t('invoices.daysPastDue', { days: aging.daysPastDue })
+          : t('invoices.notPastDue')}
       </span>
     </span>
   );
 }
 
 function DueCell({ receivable }: { receivable: ReceivableView }) {
+  const t = usePortalT();
   return (
     <span className="inline-flex items-center gap-1.5">
       <time dateTime={receivable.dueDate} className="text-xs text-ink-soft">
         {receivable.dueDate.slice(0, 10)}
       </time>
-      {receivable.overdue && <Badge tone="danger">overdue</Badge>}
+      {receivable.overdue && <Badge tone="danger">{t('invoices.overdueBadge')}</Badge>}
     </span>
   );
 }
@@ -84,6 +106,7 @@ function MoneyCell({ money }: { money: ReceivableView['balance'] }) {
 }
 
 function InvoiceRows({ rows }: { rows: readonly ReceivableView[] }) {
+  const t = usePortalT();
   return (
     <>
       {/* Desktop table (md and up). */}
@@ -91,11 +114,11 @@ function InvoiceRows({ rows }: { rows: readonly ReceivableView[] }) {
         <Table>
           <THead>
             <TR>
-              <TH scope="col">Invoice</TH>
-              <TH scope="col">State</TH>
-              <TH scope="col">Balance</TH>
-              <TH scope="col">Due</TH>
-              <TH scope="col">Aging</TH>
+              <TH scope="col">{t('invoices.col.invoice')}</TH>
+              <TH scope="col">{t('invoices.col.state')}</TH>
+              <TH scope="col">{t('invoices.col.balance')}</TH>
+              <TH scope="col">{t('invoices.col.due')}</TH>
+              <TH scope="col">{t('invoices.col.aging')}</TH>
             </TR>
           </THead>
           <TBody>
@@ -135,7 +158,7 @@ function InvoiceRows({ rows }: { rows: readonly ReceivableView[] }) {
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <StateBadge state={receivable.state} />
-              {receivable.overdue && <Badge tone="danger">overdue</Badge>}
+              {receivable.overdue && <Badge tone="danger">{t('invoices.overdueBadge')}</Badge>}
               {receivable.aging !== null && (
                 <Badge
                   tone={
@@ -149,12 +172,12 @@ function InvoiceRows({ rows }: { rows: readonly ReceivableView[] }) {
               )}
             </div>
             <p className="mt-2 text-xs text-ink-soft">
-              due{' '}
+              {t('invoices.duePrefix')}{' '}
               <time dateTime={receivable.dueDate}>{receivable.dueDate.slice(0, 10)}</time>
               {receivable.aging !== null && receivable.aging.daysPastDue > 0
-                ? ` · ${receivable.aging.daysPastDue} days past due`
+                ? ` · ${t('invoices.daysPastDue', { days: receivable.aging.daysPastDue })}`
                 : receivable.aging !== null
-                  ? ' · not past due'
+                  ? ` · ${t('invoices.notPastDue')}`
                   : ''}
             </p>
           </li>
@@ -165,6 +188,7 @@ function InvoiceRows({ rows }: { rows: readonly ReceivableView[] }) {
 }
 
 export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient }) {
+  const t = usePortalT();
   // Cursor stack for "previous": the kernel returns only nextCursor.
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   const cursor = cursorStack[cursorStack.length - 1] ?? null;
@@ -191,15 +215,13 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
   return (
     <section aria-labelledby="portal-invoices-heading">
       <h1 id="portal-invoices-heading" className="text-lg font-semibold text-ink">
-        Your invoices
+        {t('invoices.title')}
       </h1>
-      <p className="mt-0.5 text-sm text-ink-soft">
-        Every invoice on your account with its state, balance and aging.
-      </p>
+      <p className="mt-0.5 text-sm text-ink-soft">{t('invoices.subtitle')}</p>
 
       <Card
         role="region"
-        aria-label="Invoices"
+        aria-label={t('invoices.regionLabel')}
         data-state={
           receivablesQuery.isPending
             ? 'loading'
@@ -215,9 +237,11 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
       >
         <CardHeader>
           <CardTitle>
-            Invoices{' '}
+            {t('invoices.cardTitle')}{' '}
             {total !== null && (
-              <span className="font-normal text-ink-soft">· {total} total</span>
+              <span className="font-normal text-ink-soft">
+                {t('invoices.totalBadge', { total })}
+              </span>
             )}
           </CardTitle>
         </CardHeader>
@@ -225,8 +249,8 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
           {receivablesQuery.isPending && <SkeletonRows rows={5} />}
           {authRefused && refusal !== null && (
             <AccessRefused
-              title="Your invoices are not available"
-              description="This portal session was refused access to your billing data."
+              title={t('invoices.refusedTitle')}
+              description={t('common.refusedBillingDescription')}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
               message={refusalMessage(refusal)}
@@ -234,7 +258,7 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
           )}
           {!receivablesQuery.isPending && refusal !== null && !authRefused && (
             <ErrorState
-              title="Invoices are unavailable"
+              title={t('invoices.errorTitle')}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
               message={refusalMessage(refusal)}
@@ -245,8 +269,8 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
           )}
           {!receivablesQuery.isPending && refusal === null && sourceEmpty && (
             <EmptyState
-              title="No invoices on file yet"
-              description="Nothing has been billed to your account so far."
+              title={t('common.noInvoicesTitle')}
+              description={t('common.noInvoicesDescription')}
             />
           )}
           {!receivablesQuery.isPending && refusal === null && !sourceEmpty && (
@@ -266,13 +290,15 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
                   );
                 }}
               >
-                Previous
+                {t('common.previous')}
               </Button>
               <span className="text-xs text-ink-soft">
-                page {cursorStack.length}
                 {total !== null
-                  ? ` of ≤ ${Math.max(1, Math.ceil(total / PAGE_SIZE))}`
-                  : ''}
+                  ? t('invoices.pageOf', {
+                      page: cursorStack.length,
+                      pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+                    })
+                  : t('invoices.page', { page: cursorStack.length })}
               </span>
               <Button
                 variant="secondary"
@@ -282,7 +308,7 @@ export function InvoiceList({ client = portalClient }: { client?: FuatiliaClient
                   if (nextCursor !== null) setCursorStack((stack) => [...stack, nextCursor]);
                 }}
               >
-                Next
+                {t('common.next')}
               </Button>
             </div>
           </CardFooter>

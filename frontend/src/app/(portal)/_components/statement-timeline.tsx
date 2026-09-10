@@ -14,6 +14,8 @@ import { SkeletonRows } from '@/components/ui/skeleton';
 import type { FuatiliaClient } from '@/lib/api/client';
 import { listAllPayments } from '@/lib/api/pagination';
 import { portalClient } from '@/lib/portal/browser-client';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import type { LocaleKey } from '@/lib/portal-i18n/dictionary';
 import { formatMoney } from '@/lib/money';
 import { deriveStatement, type StatementEntry, type StatementKind } from '@/lib/portal/statement';
 import { AccessRefused, isAccessRefusal } from './access-refused';
@@ -23,7 +25,9 @@ import { AccessRefused, isAccessRefusal } from './access-refused';
  * refunds, reversals and failures derived from the GET /v1/payments rows
  * (bounded pagination walk, cap disclosed when hit), newest first. Money is
  * the contract's integer minor units through lib/money.ts — never floats,
- * never toFixed.
+ * never toFixed. All payer-facing strings resolve through the portal i18n
+ * catalogs (issue #149); the statement kinds are bound to the catalog with
+ * an exhaustive Record map.
  */
 
 const KIND_TONES: Record<StatementKind, 'success' | 'info' | 'warning' | 'danger'> = {
@@ -34,37 +38,40 @@ const KIND_TONES: Record<StatementKind, 'success' | 'info' | 'warning' | 'danger
   failure: 'danger',
 };
 
-const KIND_LABELS: Record<StatementKind, string> = {
-  confirmation: 'payment confirmed',
-  allocation: 'applied to invoice',
-  refund: 'refund',
-  reversal: 'reversed',
-  failure: 'payment failed',
+/** Every statement kind has exactly one localized badge label. */
+const KIND_LABEL_KEYS: Record<StatementKind, LocaleKey> = {
+  confirmation: 'statement.kinds.confirmation',
+  allocation: 'statement.kinds.allocation',
+  refund: 'statement.kinds.refund',
+  reversal: 'statement.kinds.reversal',
+  failure: 'statement.kinds.failure',
 };
 
 function EntryAmount({ entry }: { entry: StatementEntry }) {
+  const t = usePortalT();
   if (entry.amount === null) {
-    return <span className="text-sm text-ink-soft">no funds moved</span>;
+    return <span className="text-sm text-ink-soft">{t('statement.noFundsMoved')}</span>;
   }
   const attempted = entry.kind === 'failure';
   return (
     <span className="text-sm font-semibold tabular-nums text-ink">
       {formatMoney(entry.amount)}
       {attempted && (
-        <span className="ml-1 font-normal text-ink-soft">attempted</span>
+        <span className="ml-1 font-normal text-ink-soft">{t('statement.attempted')}</span>
       )}
     </span>
   );
 }
 
 function StatementRows({ entries }: { entries: readonly StatementEntry[] }) {
+  const t = usePortalT();
   return (
     <ol className="flex flex-col divide-y divide-slate-100" data-testid="statement-timeline">
       {entries.map((entry) => (
         <li key={entry.key} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={KIND_TONES[entry.kind]}>{KIND_LABELS[entry.kind]}</Badge>
+              <Badge tone={KIND_TONES[entry.kind]}>{t(KIND_LABEL_KEYS[entry.kind])}</Badge>
               <span className="font-mono text-xs text-ink-soft">{entry.externalRef}</span>
             </div>
             {entry.detail !== null && (
@@ -84,6 +91,7 @@ function StatementRows({ entries }: { entries: readonly StatementEntry[] }) {
 }
 
 export function StatementTimeline({ client = portalClient }: { client?: FuatiliaClient }) {
+  const t = usePortalT();
   const paymentsQuery = useQuery({
     queryKey: ['portal', 'payments', 'all'],
     queryFn: () => listAllPayments(client),
@@ -99,16 +107,13 @@ export function StatementTimeline({ client = portalClient }: { client?: Fuatilia
   return (
     <section aria-labelledby="portal-statement-heading">
       <h1 id="portal-statement-heading" className="text-lg font-semibold text-ink">
-        Your statement
+        {t('statement.title')}
       </h1>
-      <p className="mt-0.5 text-sm text-ink-soft">
-        Every confirmation, application, refund, reversal and failure on your account — newest
-        first, from the payment ledger.
-      </p>
+      <p className="mt-0.5 text-sm text-ink-soft">{t('statement.subtitle')}</p>
 
       <Card
         role="region"
-        aria-label="Statement activity"
+        aria-label={t('statement.regionLabel')}
         data-state={
           paymentsQuery.isPending
             ? 'loading'
@@ -123,14 +128,14 @@ export function StatementTimeline({ client = portalClient }: { client?: Fuatilia
         className="mt-4"
       >
         <CardHeader>
-          <CardTitle>Activity</CardTitle>
+          <CardTitle>{t('statement.cardTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           {paymentsQuery.isPending && <SkeletonRows rows={5} />}
           {authRefused && refusal !== null && (
             <AccessRefused
-              title="Your statement is not available"
-              description="This portal session was refused access to your payment data."
+              title={t('statement.refusedTitle')}
+              description={t('common.refusedPaymentsDescription')}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
               message={refusalMessage(refusal)}
@@ -138,7 +143,7 @@ export function StatementTimeline({ client = portalClient }: { client?: Fuatilia
           )}
           {!paymentsQuery.isPending && refusal !== null && !authRefused && (
             <ErrorState
-              title="Your statement is unavailable"
+              title={t('statement.errorTitle')}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
               message={refusalMessage(refusal)}
@@ -149,8 +154,8 @@ export function StatementTimeline({ client = portalClient }: { client?: Fuatilia
           )}
           {!paymentsQuery.isPending && refusal === null && sourceEmpty && (
             <EmptyState
-              title="No payments on file yet"
-              description="Once a payment is received on your account it will appear here with where it was applied."
+              title={t('common.noPaymentsTitle')}
+              description={t('statement.emptyDescription')}
             />
           )}
           {!paymentsQuery.isPending && refusal === null && !sourceEmpty && (
@@ -161,8 +166,7 @@ export function StatementTimeline({ client = portalClient }: { client?: Fuatilia
                   className="mb-3 rounded-md border border-warn-soft bg-warn-soft/40 px-3 py-2 text-xs text-ink-soft"
                   data-testid="statement-truncated"
                 >
-                  Showing the most recent payments only — the page cap was reached, so older
-                  activity is not listed.
+                  {t('statement.truncatedNote')}
                 </p>
               )}
               <StatementRows entries={entries} />
