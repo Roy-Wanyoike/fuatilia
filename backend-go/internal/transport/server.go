@@ -23,12 +23,14 @@ func Compose(deps Deps, log *slog.Logger, onError func(err error, requestID stri
 		return ComposeResult{}, err
 	}
 	kernel, err := NewKernel(KernelOptions{
-		Routes:       table,
-		Auth:         deps.Auth,
-		Clock:        deps.Clock,
-		MaxBodyBytes: DefaultMaxBodyBytes,
-		Log:          log,
-		OnError:      onError,
+		Routes:          table,
+		Auth:            deps.Auth,
+		Clock:           deps.Clock,
+		MaxBodyBytes:    DefaultMaxBodyBytes,
+		Log:             log,
+		OnError:         onError,
+		Limits:          deps.Limits,
+		SecurityHeaders: deps.SecurityHeaders,
 	})
 	if err != nil {
 		return ComposeResult{}, err

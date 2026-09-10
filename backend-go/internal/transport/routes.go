@@ -13,9 +13,16 @@ import (
 // authenticator and the clock. Composition (server.go) binds them over the
 // PostgreSQL pool.
 type Deps struct {
-	Services *application.Services
-	Auth     *auth.Authenticator
-	Clock    infra.Clock
+	// Limits sizes the kernel's per-identity+IP rate limiter (issue #130);
+	// the zero value DISABLES limiting — compositions that leave it unset
+	// keep byte-identical wire behavior.
+	Limits RateLimitConfig
+	// SecurityHeaders carries the deployment's header policy (the HSTS flag
+	// — issue #130). The zero value applies the four unconditional headers.
+	SecurityHeaders SecurityHeaders
+	Services        *application.Services
+	Auth            *auth.Authenticator
+	Clock           infra.Clock
 }
 
 // publicRoutes mounts the no-auth rows (routes/public.ts): liveness + the

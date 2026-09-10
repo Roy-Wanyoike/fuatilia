@@ -72,10 +72,23 @@ func run() error {
 		},
 	}
 
+	// Rate limiting + security headers (issue #130): the deployment contract
+	// sizes both — malformed values are boot failures, never silently ignored.
+	limits, err := transport.RateLimitConfigFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+	headers, err := transport.SecurityHeadersFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+
 	composed, err := transport.Compose(transport.Deps{
-		Services: services,
-		Auth:     authenticator,
-		Clock:    clock,
+		Services:        services,
+		Auth:            authenticator,
+		Clock:           clock,
+		Limits:          limits,
+		SecurityHeaders: headers,
 	}, logger, func(err error, requestID string) {
 		logger.Error("http.internal_error",
 			slog.String("requestId", requestID),
