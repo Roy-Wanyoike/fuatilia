@@ -375,10 +375,11 @@ this document is the PostgreSQL fund/schema truth.
   `ck_payments_reversal_shape` (reversed ⇔ reversed_at — a reasoned decision, R3).
 - A replayed Daraja callback finds this row via `uq_payments_org_external_ref` instead of creating
   money (R9/C5).
-- Indexes: `idx_payments_state`, `idx_payments_initiated_at`, `idx_payments_customer`,
+- Indexes: `idx_payments_state`, `idx_payments_customer`,
   `idx_payments_unapplied(org_id, state, unapplied_minor) WHERE state IN (confirmed, unapplied,
   partially_allocated)` (unapplied parking sweeps, C4); plus `idx_payments_org_created`,
-  `idx_payments_org_initiated` (0015 list pagination).
+  `idx_payments_org_initiated` (0015 list pagination). `idx_payments_initiated_at` (0005) was
+  dropped by 0016 — subsumed by `idx_payments_org_initiated` (issue #179).
 
 ### `reconciliation_matches`
 
@@ -984,7 +985,7 @@ Go kernel runs and EXPLAIN-evidenced (`db/explain/0015-{before,after}.txt`; map 
 | `idx_receivables_org_created` | receivables | (org_id, created_at, id) | GET /v1/receivables default page + org count |
 | `idx_receivables_org_due` | receivables | (org_id, due_date, id) | GET /v1/receivables?sort=dueDate |
 | `idx_payments_org_created` | payments | (org_id, created_at, id) | GET /v1/payments default page + org count |
-| `idx_payments_org_initiated` | payments | (org_id, initiated_at, id) | GET /v1/payments?sort=initiatedAt (subsumes idx_payments_initiated_at) |
+| `idx_payments_org_initiated` | payments | (org_id, initiated_at, id) | GET /v1/payments?sort=initiatedAt (replaced idx_payments_initiated_at, dropped in 0016) |
 | `idx_collections_cases_org_created` | collections_cases | (org_id, created_at, id) | GET /v1/collections/cases default page |
 | `idx_allocations_payment_live` | allocations | (org_id, source_type, source_id, allocated_at, id) WHERE reversed_at IS NULL | payment detail allocations + R6 ceiling input |
 | `idx_promises_receivable_open` | promises | (org_id, receivable_id) WHERE state IN (created, pending, partially_fulfilled) | case-detail pending-promise overlay |
