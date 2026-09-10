@@ -75,7 +75,8 @@ type orgState struct {
 	billedByDay           map[string]map[int64]int64 // currency → day → NET billed (void-adjusted)
 	collectedByReceivable map[string]map[int64]int64 // receivableID → day → collected minor
 	promisesBrokenByDay   map[int64]int64
-	activityDays          map[int64]struct{} // days whose events move money/book figures
+	promiseDays           map[int64]struct{} // days a promise outcome landed (moves the effectiveness evidence, not the book)
+	activityDays          map[int64]struct{} // days whose events move money/book figures (dso_daily/aging closes)
 	skips                 []skipRecord
 }
 
@@ -88,6 +89,7 @@ func newOrgState(orgID string) *orgState {
 		billedByDay:           map[string]map[int64]int64{},
 		collectedByReceivable: map[string]map[int64]int64{},
 		promisesBrokenByDay:   map[int64]int64{},
+		promiseDays:           map[int64]struct{}{},
 		activityDays:          map[int64]struct{}{},
 	}
 }
@@ -136,11 +138,36 @@ func (s *orgState) currencies() []string {
 }
 
 // activityDayList returns the org's activity days ascending — the days that
-// carry projection rows (event-driven, not calendar-filled).
+// carry projection rows (event-driven, not calendar-filled). These are the
+// book/billing activity days: dso_daily and aging_migration close on exactly
+// these (their DDL: "a row exists only for days on which the org's book or
+// billing actually changed").
 func (s *orgState) activityDayList() []int64 {
 	days := make([]int64, 0, len(s.activityDays))
 	for d := range s.activityDays {
 		days = append(days, d)
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i] < days[j] })
+	return days
+}
+
+// effectivenessDayList returns the days on which a collector_effectiveness
+// window closes: the book/billing activity days PLUS days on which a promise
+// outcome landed — a break moves the row's promises_broken evidence on its
+// own day (an input of THIS table), so the window that sees it exists the
+// moment it happens. A promise-only day never opens a dso_daily or aging
+// row: the book and billing did not change (0002/0003 headers).
+func (s *orgState) effectivenessDayList() []int64 {
+	days := make([]int64, 0, len(s.activityDays)+len(s.promiseDays))
+	seen := make(map[int64]struct{}, len(s.activityDays)+len(s.promiseDays))
+	for d := range s.activityDays {
+		days = append(days, d)
+		seen[d] = struct{}{}
+	}
+	for d := range s.promiseDays {
+		if _, ok := seen[d]; !ok {
+			days = append(days, d)
+		}
 	}
 	sort.Slice(days, func(i, j int) bool { return days[i] < days[j] })
 	return days

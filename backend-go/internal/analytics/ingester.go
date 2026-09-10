@@ -105,13 +105,24 @@ func (ing *Ingester) IngestBatch(ctx context.Context, batch [][]byte) (Stats, er
 		parsed = append(parsed, env)
 	}
 
-	// 2. Dedupe (orgId, eventId).
+	// 2. Dedupe (orgId, eventId) — across batches (the seen map) AND
+	// within one batch (overlapping delivery: a live drain can mix with a
+	// replayed range in a single Consume batch). At-least-once forever
+	// means the same event may arrive any number of times through any
+	// path; every duplicate after the first is collapsed here.
 	fresh := make([]Envelope, 0, len(parsed))
+	batchSeen := make(map[string]struct{}, len(parsed))
 	for _, env := range parsed {
 		if ing.alreadySeen(env) {
 			stats.Duplicates++
 			continue
 		}
+		key := env.OrgID + "\x00" + env.EventID
+		if _, dup := batchSeen[key]; dup {
+			stats.Duplicates++
+			continue
+		}
+		batchSeen[key] = struct{}{}
 		fresh = append(fresh, env)
 	}
 	stats.Accepted = len(fresh)

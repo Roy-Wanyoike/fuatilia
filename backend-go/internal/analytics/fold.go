@@ -32,6 +32,7 @@ func (s *orgState) refold() error {
 	s.billedByDay = map[string]map[int64]int64{}
 	s.collectedByReceivable = map[string]map[int64]int64{}
 	s.promisesBrokenByDay = map[int64]int64{}
+	s.promiseDays = map[int64]struct{}{}
 	s.activityDays = map[int64]struct{}{}
 	s.skips = nil
 
@@ -313,7 +314,8 @@ func (s *orgState) apply(ev *Envelope) error {
 		if _, err := payloadUUID(p.PromiseID, CodePayloadInvalid, "promiseId"); err != nil {
 			return err
 		}
-		s.promisesBrokenByDay[day]++ // evidence count for the structural promise_kept NULL
+		s.promisesBrokenByDay[day]++    // evidence count for the structural promise_kept NULL
+		s.promiseDays[day] = struct{}{} // the break moves effectiveness evidence on its own day
 
 	default:
 		// Ledger-only event (payments, reconciliation, adjustments,

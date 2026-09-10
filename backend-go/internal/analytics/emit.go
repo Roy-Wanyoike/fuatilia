@@ -37,6 +37,10 @@ func (e *emitter) exec(query string, args ...any) error {
 }
 
 // emitProjections re-derives and upserts every projection row for the org.
+// Each table closes on the days ITS OWN inputs moved (see
+// activityDayList / effectivenessDayList): dso_daily + aging_migration on
+// book/billing days, collector_effectiveness on book/billing days plus
+// promise-outcome days.
 func emitProjections(ctx context.Context, driver Driver, s *orgState) (int, error) {
 	e := &emitter{ctx: ctx, driver: driver}
 	watermark := s.watermark()
@@ -49,6 +53,10 @@ func emitProjections(ctx context.Context, driver Driver, s *orgState) (int, erro
 			if err := e.emitAging(s, cur, day, watermark); err != nil {
 				return e.rows, err
 			}
+		}
+	}
+	for _, day := range s.effectivenessDayList() {
+		for _, cur := range s.currencies() {
 			if err := e.emitEffectiveness(s, cur, day, watermark); err != nil {
 				return e.rows, err
 			}
