@@ -6,12 +6,18 @@ import { CaseRecordActionPanel } from '@/app/(dashboard)/collections/_components
 import { CaseCompleteActionPanel } from '@/app/(dashboard)/collections/_components/case-complete-action-panel';
 import { CustomerDirectory } from '@/app/(dashboard)/customers/_components/customer-directory';
 import { CollectionsScreen } from '@/components/command-center/collections-screen';
+import { AppShell } from '@/components/shell/app-shell';
 import { QueryProviders } from '@/providers/query-provider';
 import { createFuatiliaClient, type FetchLike } from '@/lib/api/client';
 import { caseListEmptyExample, specCase } from '@/lib/api/fixtures/collections';
 import { paymentListEmptyExample } from '@/lib/api/fixtures/payments';
 import { receivableListEmptyExample } from '@/lib/api/fixtures/receivables';
 import { PortalI18nProvider } from '@/lib/portal-i18n/context';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/collections',
+}));
 
 // =============================================================================
 // SW RENDERING — dashboard (issue #180): the collector console genuinely
@@ -127,6 +133,28 @@ describe('dashboard rendering in Kiswahili (#180)', () => {
     // With a never-answering wire the queries stay in flight, so refresh is
     // honestly disabled (the a11y suite pins the enabled state separately).
     expect(screen.getByRole('button', { name: 'Onyesha upya' })).toBeDisabled();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the dashboard shell chrome in sw: skip link, nav, health badge', () => {
+    const neverFetch: FetchLike = () => new Promise<Response>(() => undefined);
+    vi.stubGlobal('fetch', neverFetch);
+    const client = createFuatiliaClient({
+      baseUrl: 'http://dashboard.test',
+      fetchImpl: neverFetch,
+      logger: null,
+      requestIdGenerator: () => 'test-req-1',
+    });
+    renderInSw(<AppShell client={client}>null</AppShell>);
+
+    expect(screen.getByRole('link', { name: 'Ruka hadi maudhui' })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Menyu kuu' });
+    expect(nav).toBeInTheDocument();
+    // The collections nav item renders its Kiswahili label + description…
+    expect(screen.getByRole('link', { name: /Makusanyi/ })).toBeInTheDocument();
+    expect(screen.getByText('Kituo cha Amri + kesa')).toBeInTheDocument();
+    // …and the health probe says so in words (pending state).
+    expect(screen.getByText('inakagua…')).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
 });

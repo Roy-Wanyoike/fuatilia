@@ -176,6 +176,32 @@ export const en = {
   // them, so any edit here is a visible copy change, never a silent one.
   // =========================================================================
   dashboard: {
+    shell: {
+      skipToContent: 'Skip to content',
+      brandTagline: 'AR & collections · Kenya',
+      navAriaLabel: 'Primary',
+      /** Badge for a section whose backend capability is not mounted yet. */
+      planned: 'planned',
+      permissionsNote:
+        'Permissions are enforced by the API (deny-by-default). Refusals surface in-page with their contract code.',
+      /** Sr-only prefix before the health state (trailing space is deliberate). */
+      apiHealthSrPrefix: 'API health: ',
+      health: {
+        checking: 'checking…',
+        reachable: 'reachable',
+        unreachable: 'unreachable',
+      },
+      /** Nav labels, bound in the shell via Record<href, LocaleKey> maps. */
+      nav: {
+        overview: { label: 'Overview', description: 'Headline money positions' },
+        collections: { label: 'Collections', description: 'Command Center + cases' },
+        payments: { label: 'Payments', description: 'Fund truth, Daraja intake' },
+        reconciliation: { label: 'Reconciliation', description: 'Matching + unapplied cash' },
+        customers: { label: 'Customers', description: 'Customer 360' },
+        settings: { label: 'Settings', description: 'Team, roles, API keys' },
+      },
+    },
+
     overview: {
       title: 'Overview',
       subtitle:

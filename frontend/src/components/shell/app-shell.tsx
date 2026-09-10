@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { defaultClient } from '@/lib/api/browser-client';
 import type { ApiResult, FuatiliaClient } from '@/lib/api/client';
 import type { HealthData } from '@/lib/api/wire-types';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import type { LocaleKey } from '@/lib/portal-i18n/dictionary';
 
 /**
  * Dashboard shell: landmark structure (banner / navigation / main), a
@@ -20,6 +22,11 @@ import type { HealthData } from '@/lib/api/wire-types';
  * does not mount one. Permission vocabulary is displayed per item so
  * operators can see what a section requires; enforcement is server-side
  * (403 AUTH_ACCESS_DENIED envelopes surface in-page).
+ *
+ * Strings (issue #180): NAV_ITEMS keeps its raw metadata (tests pin it);
+ * the RENDERED label + description resolve through the shared catalog via
+ * Record<href, LocaleKey> maps — a nav item without a catalog entry is a
+ * tsc error at the map. en stays byte-identical.
  */
 
 export interface NavItem {
@@ -32,7 +39,7 @@ export interface NavItem {
   permission: string | null;
 }
 
-export const NAV_ITEMS: readonly NavItem[] = [
+export const NAV_ITEMS = [
   {
     href: '/',
     label: 'Overview',
@@ -75,7 +82,27 @@ export const NAV_ITEMS: readonly NavItem[] = [
     capability: 'auth',
     permission: 'admin:manage-users',
   },
-] as const;
+] as const satisfies readonly NavItem[];
+
+/** Rendered label per nav item — a missing entry is a tsc error here. */
+const NAV_LABEL_KEYS: Record<(typeof NAV_ITEMS)[number]['href'], LocaleKey> = {
+  '/': 'dashboard.shell.nav.overview.label',
+  '/collections': 'dashboard.shell.nav.collections.label',
+  '/payments': 'dashboard.shell.nav.payments.label',
+  '/reconciliation': 'dashboard.shell.nav.reconciliation.label',
+  '/customers': 'dashboard.shell.nav.customers.label',
+  '/settings': 'dashboard.shell.nav.settings.label',
+};
+
+/** Rendered description per nav item — same contract as the labels. */
+const NAV_DESCRIPTION_KEYS: Record<(typeof NAV_ITEMS)[number]['href'], LocaleKey> = {
+  '/': 'dashboard.shell.nav.overview.description',
+  '/collections': 'dashboard.shell.nav.collections.description',
+  '/payments': 'dashboard.shell.nav.payments.description',
+  '/reconciliation': 'dashboard.shell.nav.reconciliation.description',
+  '/customers': 'dashboard.shell.nav.customers.description',
+  '/settings': 'dashboard.shell.nav.settings.description',
+};
 
 export function AppShell({
   children,
@@ -84,6 +111,7 @@ export function AppShell({
   children: ReactNode;
   client?: FuatiliaClient;
 }) {
+  const t = usePortalT();
   const pathname = usePathname();
   const metaQuery = useQuery({
     queryKey: ['api', 'meta'],
@@ -109,14 +137,14 @@ export function AppShell({
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
       >
-        Skip to content
+        {t('dashboard.shell.skipToContent')}
       </a>
 
       <header className="border-b border-slate-200 bg-surface-raised">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <p className="text-sm font-semibold tracking-tight text-ink">
             Fuatilia
-            <span className="ml-2 font-normal text-ink-faint">AR &amp; collections · Kenya</span>
+            <span className="ml-2 font-normal text-ink-faint">{t('dashboard.shell.brandTagline')}</span>
           </p>
           <div className="flex items-center gap-2 text-xs text-ink-faint">
             <span aria-hidden="true">API</span>
@@ -127,7 +155,7 @@ export function AppShell({
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
         <nav
-          aria-label="Primary"
+          aria-label={t('dashboard.shell.navAriaLabel')}
           className="w-56 shrink-0 self-start rounded-lg border border-slate-200 bg-surface-raised p-3"
         >
           <ul className="space-y-1">
@@ -149,11 +177,13 @@ export function AppShell({
                     }`}
                   >
                     <span className="flex items-center justify-between gap-2">
-                      {item.label}
-                      {capabilityMissing && <Badge tone="neutral">planned</Badge>}
+                      {t(NAV_LABEL_KEYS[item.href])}
+                      {capabilityMissing && (
+                        <Badge tone="neutral">{t('dashboard.shell.planned')}</Badge>
+                      )}
                     </span>
                     <span className="text-xs font-normal text-ink-faint">
-                      {item.description}
+                      {t(NAV_DESCRIPTION_KEYS[item.href])}
                     </span>
                   </Link>
                 </li>
@@ -161,8 +191,7 @@ export function AppShell({
             })}
           </ul>
           <p className="mt-3 border-t border-slate-100 pt-2 text-xs leading-relaxed text-ink-faint">
-            Permissions are enforced by the API (deny-by-default). Refusals surface in-page with
-            their contract code.
+            {t('dashboard.shell.permissionsNote')}
           </p>
         </nav>
 
@@ -181,15 +210,18 @@ function HealthBadge({
 }: {
   healthQuery: UseQueryResult<ApiResult<HealthData>>;
 }) {
+  const t = usePortalT();
   const result = healthQuery.data;
   const state = (() => {
-    if (healthQuery.isPending) return { tone: 'neutral' as const, label: 'checking…' };
-    if (result?.ok === true) return { tone: 'success' as const, label: 'reachable' };
-    return { tone: 'danger' as const, label: 'unreachable' };
+    if (healthQuery.isPending)
+      return { tone: 'neutral' as const, label: t('dashboard.shell.health.checking') };
+    if (result?.ok === true)
+      return { tone: 'success' as const, label: t('dashboard.shell.health.reachable') };
+    return { tone: 'danger' as const, label: t('dashboard.shell.health.unreachable') };
   })();
   return (
     <Badge tone={state.tone}>
-      <span className="sr-only">API health: </span>
+      <span className="sr-only">{t('dashboard.shell.apiHealthSrPrefix')}</span>
       {state.label}
     </Badge>
   );

@@ -160,6 +160,32 @@ export const sw = {
   // (dashboard) — koni ya mkusanyaji (issue #180).
   // =========================================================================
   dashboard: {
+    shell: {
+      skipToContent: 'Ruka hadi maudhui',
+      brandTagline: 'AR na makusanyi · Kenya',
+      navAriaLabel: 'Menyu kuu',
+      /** Beba kwa sehemu ambayo uwezo wake wa nyuma hajaunganishwa bado. */
+      planned: 'kwenye mpangilio',
+      permissionsNote:
+        'Ruhusa hutekelezwa na API (kukanusha ndiyo chaguo-msingi). Makataa huonekana ndani ya ukurasa yenye msimbo wake wa mkataba.',
+      /** Kiambishi cha sr-only kabla ya hali ya afya (nafasi ya mwisho ni ya makusudi). */
+      apiHealthSrPrefix: 'API health: ',
+      health: {
+        checking: 'inakagua…',
+        reachable: 'inafikika',
+        unreachable: 'haifiki',
+      },
+      /** Lebo za menyu, zilizounganishwa kwenye shell kwa Record<href, LocaleKey>. */
+      nav: {
+        overview: { label: 'Muhtasari', description: 'Nafasi kuu za pesa' },
+        collections: { label: 'Makusanyi', description: 'Kituo cha Amri + kesa' },
+        payments: { label: 'Malipo', description: 'Ukweli wa fedha, ingizo la Daraja' },
+        reconciliation: { label: 'Ulinganishi', description: 'Ulinganifu + pesa isiyotumika' },
+        customers: { label: 'Wateja', description: 'Mteja 360' },
+        settings: { label: 'Mipangilio', description: 'Timu, wadhifa, ufunguo wa API' },
+      },
+    },
+
     overview: {
       title: 'Muhtasari',
       subtitle:

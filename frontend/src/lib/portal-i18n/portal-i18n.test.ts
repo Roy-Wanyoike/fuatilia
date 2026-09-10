@@ -226,6 +226,16 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
         book: 'KES 75,000.00',
       }),
     ).toBe('Top 5 by outstanding balance — total book KES 75,000.00');
+    // Dashboard shell — the a11y suite pins the nav landmark, skip link,
+    // health states and per-item labels.
+    expect(translate(en, 'dashboard.shell.skipToContent')).toBe('Skip to content');
+    expect(translate(en, 'dashboard.shell.navAriaLabel')).toBe('Primary');
+    expect(translate(en, 'dashboard.shell.planned')).toBe('planned');
+    expect(translate(en, 'dashboard.shell.nav.overview.label')).toBe('Overview');
+    expect(translate(en, 'dashboard.shell.nav.settings.description')).toBe(
+      'Team, roles, API keys',
+    );
+    expect(translate(en, 'dashboard.shell.health.reachable')).toBe('reachable');
   });
 
   it('auth strings that component tests pin resolve byte-identically', () => {
