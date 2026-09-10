@@ -215,23 +215,15 @@ func msisdnString(raw any) (string, bool) {
 	}
 }
 
-// assertResultCode mirrors assertResultCode: non-negative integer.
+// assertResultCode mirrors assertResultCode: a JSON NUMBER, non-negative
+// integer (Number.isSafeInteger parity via the 2^53 bound). String forms —
+// even "0" — are refused: a quoted result code is not a result code.
 func assertResultCode(raw any) (int64, error) {
-	switch v := raw.(type) {
-	case float64:
-		if v != float64(int64(v)) || v < 0 || v >= 1<<53 {
-			return 0, errf(CodeResultCodeInvalid, "ResultCode %v must be a non-negative integer", raw)
-		}
-		return int64(v), nil
-	case string:
-		n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
-		if err != nil || n < 0 {
-			return 0, errf(CodeResultCodeInvalid, "ResultCode %q must be a non-negative integer", v)
-		}
-		return n, nil
-	default:
-		return 0, errf(CodeResultCodeInvalid, "ResultCode %v must be a non-negative integer", raw)
+	v, ok := raw.(float64)
+	if !ok || v != float64(int64(v)) || v < 0 || v >= 1<<53 {
+		return 0, errf(CodeResultCodeInvalid, "ResultCode %v must be a JSON number (non-negative integer)", raw)
 	}
+	return int64(v), nil
 }
 
 // nonEmptyString: strings pass trimmed; JSON numbers are NOT strings.
@@ -262,6 +254,28 @@ func numberOrDecimalString(raw any) (string, bool) {
 			return strconv.FormatFloat(v, 'f', -1, 64), true
 		}
 		return strconv.FormatInt(int64(v), 10), true
+	default:
+		return "", false
+	}
+}
+
+// jsString mirrors JS String() for the value types JSON can deliver, so a
+// present-but-junk metadata value is VALIDATED (and refused) exactly where
+// the TS lane refuses it instead of being silently skipped.
+func jsString(raw any) (string, bool) {
+	switch v := raw.(type) {
+	case string:
+		return v, true
+	case float64:
+		// 'f' keeps integral wire values (timestamps, receipts) digit-exact.
+		return strconv.FormatFloat(v, 'f', -1, 64), true
+	case bool:
+		if v {
+			return "true", true
+		}
+		return "false", true
+	case nil:
+		return "null", true
 	default:
 		return "", false
 	}
@@ -466,21 +480,32 @@ func parseSTK(p map[string]any, opts ParseOptions) (ParsedSTKCallback, error) {
 			}
 			hasPaid = true
 			receiptRaw, hasReceipt := itemsMap["MpesaReceiptNumber"]
-			receiptStr, _ := receiptRaw.(string)
-			if !hasReceipt || !transIDPattern.MatchString(strings.TrimSpace(receiptStr)) {
+			if !hasReceipt {
 				return ParsedSTKCallback{}, errf(CodeSTKMetadataMalformed,
 					"a successful STK result carries an MpesaReceiptNumber (uppercase [A-Z0-9], 10–22 chars)")
 			}
-			receiptNumber = strings.TrimSpace(receiptStr)
+			// String() parity: Daraja has been observed sending the receipt
+			// as a JSON NUMBER — coerce before the pattern test.
+			receiptStr, ok := jsString(receiptRaw)
+			if !ok || !transIDPattern.MatchString(receiptStr) {
+				return ParsedSTKCallback{}, errf(CodeSTKMetadataMalformed,
+					"a successful STK result carries an MpesaReceiptNumber (uppercase [A-Z0-9], 10–22 chars)")
+			}
+			receiptNumber = receiptStr
 			if whenRaw, hasWhen := itemsMap["TransactionDate"]; hasWhen {
-				whenStr, _ := whenRaw.(string)
-				if whenStr != "" {
-					transTime, err = transTimeToDate(whenStr)
-					if err != nil {
-						return ParsedSTKCallback{}, err
-					}
-					hasTransTime = true
+				// String() parity, then validate: a PRESENT-but-junk
+				// TransactionDate is refused, never silently skipped —
+				// a fabricated timestamp must not enter evidence.
+				whenStr, ok := jsString(whenRaw)
+				if !ok {
+					return ParsedSTKCallback{}, errf(CodeSTKMetadataMalformed,
+						"metadata TransactionDate must be a string")
 				}
+				transTime, err = transTimeToDate(whenStr)
+				if err != nil {
+					return ParsedSTKCallback{}, err
+				}
+				hasTransTime = true
 			}
 			if phoneRaw, hasPhone := itemsMap["PhoneNumber"]; hasPhone {
 				msisdn, err = assertMSISDN(phoneRaw)

@@ -499,3 +499,76 @@ func TestParseC2BBillRefNumberNumericKeepsDecimalShape(t *testing.T) {
 		}
 	})
 }
+
+// STK parse strictness (gap-audit parity): present-but-junk TransactionDate
+// metadata must be REFUSED (not silently skipped), a numeric
+// MpesaReceiptNumber must string-coerce like the TS String() call, and
+// ResultCode is number-only — a quoted "0" is not a result code.
+
+func TestParseSTKJunkTransactionDateRefused(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		value    any
+		wantCode string
+	}{
+		{"garbage string", "2026-09-08 10:16", CodeTransTimeMalformed},
+		{"calendar rollover", "20260230101530", CodeTransTimeMalformed},
+		{"empty string was never a skip", "", CodeTransTimeMalformed},
+		{"numeric junk", 2500.0, CodeTransTimeMalformed},
+		{"bool junk", true, CodeTransTimeMalformed},
+		{"object junk", map[string]any{"deep": 1}, CodeSTKMetadataMalformed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := stkSuccessPayload()
+			items := p["Body"].(map[string]any)["stkCallback"].(map[string]any)["CallbackMetadata"].(map[string]any)["Item"].([]any)
+			for _, item := range items {
+				if m, ok := item.(map[string]any); ok && m["Name"] == "TransactionDate" {
+					m["Value"] = tc.value
+				}
+			}
+			wantCode(t, p, ParseOptions{}, tc.wantCode)
+		})
+	}
+	t.Run("failure results still tolerate metadata shapes (success-only validation, TS parity)", func(t *testing.T) {
+		p := stkSuccessPayload()
+		cb := p["Body"].(map[string]any)["stkCallback"].(map[string]any)
+		cb["ResultCode"] = 1032
+		cb["ResultDesc"] = "cancelled"
+		requested := map[string]int64{"ws_CO_19122019102036805": 250_000}
+		parsed := mustParse(t, p, ParseOptions{STKRequested: requested}).(ParsedSTKCallback)
+		if parsed.Success || parsed.HasTransTime {
+			t.Fatalf("failed result must carry no transaction time: %+v", parsed)
+		}
+	})
+}
+
+func TestParseSTKNumericReceiptCoerced(t *testing.T) {
+	t.Parallel()
+	p := stkSuccessPayload()
+	items := p["Body"].(map[string]any)["stkCallback"].(map[string]any)["CallbackMetadata"].(map[string]any)["Item"].([]any)
+	for _, item := range items {
+		if m, ok := item.(map[string]any); ok && m["Name"] == "MpesaReceiptNumber" {
+			m["Value"] = 1234567890.0 // JSON number receipt (observed Daraja quirk)
+		}
+	}
+	parsed := mustParse(t, p, ParseOptions{}).(ParsedSTKCallback)
+	if parsed.ReceiptNumber != "1234567890" {
+		t.Fatalf("receipt = %q, want the String()-coerced 1234567890", parsed.ReceiptNumber)
+	}
+}
+
+func TestParseSTKResultCodeIsNumberOnly(t *testing.T) {
+	t.Parallel()
+	t.Run("string zero refused", func(t *testing.T) {
+		p := stkSuccessPayload()
+		p["Body"].(map[string]any)["stkCallback"].(map[string]any)["ResultCode"] = "0"
+		wantCode(t, p, ParseOptions{}, CodeResultCodeInvalid)
+	})
+	t.Run("string numeric refused on B2C too", func(t *testing.T) {
+		p := b2cSuccessPayload()
+		p["ResultCode"] = "0"
+		wantCode(t, p, ParseOptions{}, CodeResultCodeInvalid)
+	})
+}
