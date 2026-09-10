@@ -48,8 +48,21 @@ ENTRYPOINT ["/api"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD ["/bin/busybox", "wget", "-q", "--spider", "http://127.0.0.1:8080/v1/health"]
 
-# --- worker: distroless/static, non-root; no listener => no port, no probe -
+# --- worker: distroless/static, non-root; network-path healthcheck ---------
 FROM gcr.io/distroless/static-debian12:nonroot AS worker
 COPY --from=build-worker /out/worker /worker
+# The relay has no listener (it polls PostgreSQL, publishes to JetStream), so
+# it cannot probe ITSELF over HTTP. The honest probe available without
+# touching the Go lane: prove the broker endpoint is reachable from THIS
+# container's network namespace — busybox wget against the nats monitor
+# /healthz (compose-internal port 8222; docker-compose.yml and this probe
+# ship together, issue #138). Disclosed limits: a wedged relay with a green
+# probe is possible — crash failures are caught by the exit code and
+# restart: unless-stopped, and the worker's JSON logs are the operator's
+# truth. During a NATS restart the probe may flap unhealthy while the relay
+# is doing exactly the right thing (MaxReconnects(-1) reconnect loop).
+COPY --from=busybox:1.37.0-musl /bin/busybox /bin/busybox
 USER nonroot:nonroot
 ENTRYPOINT ["/worker"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=5 \
+  CMD ["/bin/busybox", "wget", "-q", "--spider", "http://nats:8222/healthz"]

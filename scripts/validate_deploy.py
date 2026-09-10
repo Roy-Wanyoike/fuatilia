@@ -7,22 +7,29 @@ The build environment has NO Docker daemon, so this validator is deliberately
 static/structural. What it proves and what it cannot:
 
   PROVES
-  - docker-compose.yml parses as YAML and has exactly the five expected
-    services (postgres, nats, migrate, api, worker);
+  - docker-compose.yml parses as YAML and has exactly the six expected
+    services (postgres, nats, migrate, api, worker, frontend) — the full
+    local stack of issue #138;
   - every build context, Dockerfile, host-mounted path and
     entrypoint/command-referenced file EXISTS in the repository;
   - the service graph is ACYCLIC with the required ordering edges
-    (postgres healthy → migrate → {api, worker}; nats → worker);
-  - only the api service exposes ports;
+    (postgres healthy → migrate → {api, worker}; nats healthy → worker;
+    api healthy → frontend);
+  - only api (8080) and frontend (3000) expose ports;
   - base images are pinned (no :latest, no implicit-latest FROM) on both the
     Dockerfile stages and the compose services, and JetStream is enabled;
   - backend-go/Dockerfile is multi-stage, builds BOTH cmd targets, is
     CGO_ENABLED=0, and its final stages run as nonroot with the api
-    healthcheck hitting its own /v1/health;
-  - every env var referenced by compose (${VAR}) or read from Go code
-    (os.Getenv / os.LookupEnv in backend-go/) has a committed .env.example
-    key — the environment contract cannot drift in EITHER direction of
-    "missing key";
+    healthcheck hitting its own /v1/health and a worker network-path probe;
+  - frontend/Dockerfile is a multi-stage pinned standalone build (deps →
+    build with NEXT_OUTPUT=standalone → non-root runner) with its own
+    healthcheck;
+  - every env var referenced by compose (${VAR}), read from Go code
+    (os.Getenv / os.LookupEnv / the LoadConfig env(…) reader / the worker's
+    getenv(env…) constants in backend-go/), read by the migration tooling
+    (process.env in db/*.cjs), or read by the web console (process.env in
+    frontend/src, NODE_ENV excluded) has a committed .env.example key — the
+    environment contract cannot drift in EITHER direction of "missing key";
   - no committed credential default: POSTGRES_PASSWORD and DATABASE_URL in
     .env.example must be CHANGE_ME placeholders.
 
@@ -60,23 +67,44 @@ DOCKERFILE = REPO / "backend-go" / "Dockerfile"
 DOCKERIGNORE = REPO / "backend-go" / ".dockerignore"
 BACKEND_GO = REPO / "backend-go"
 
-REQUIRED_SERVICES = {"postgres", "nats", "migrate", "api", "worker"}
+REQUIRED_SERVICES = {"postgres", "nats", "migrate", "api", "worker", "frontend"}
 REQUIRED_NAMED_VOLUMES = {"fuatilia_pgdata", "fuatilia_nats"}
 REQUIRED_ENV_KEYS = {
-    # the contract this issue owns (docs/DEPLOY.md env table):
+    # the contract issues #75 + #138 own (docs/DEPLOY.md env table):
     "DATABASE_URL",
     "NATS_URL",
     "LISTEN_ADDR",
     "OUTBOX_BATCH",
     "OUTBOX_POLL_INTERVAL",
     "OUTBOX_MAX_ATTEMPTS",
+    # the names infra.LoadConfig actually reads (issue #138 drift fix — the
+    # pre-#138 FUATILIA_PG_MAX_CONN_LIFETIME/_IDLE_TIME keys were silently
+    # ignored by the Go binary):
     "FUATILIA_PG_MAX_CONNS",
-    "FUATILIA_PG_MAX_CONN_LIFETIME",
-    "FUATILIA_PG_MAX_CONN_IDLE_TIME",
+    "FUATILIA_PG_LIFETIME",
+    "FUATILIA_PG_IDLE_TIME",
     "POSTGRES_USER",
     "POSTGRES_DB",
     "POSTGRES_PASSWORD",
+    # db/migrate.cjs + db/exec.cjs + db/smoke.cjs (trust-auth wire vars):
+    "PGHOST",
+    "PGPORT",
+    "PGUSER",
+    "PGDATABASE",
+    # frontend (issue #138): server-side BFF target + build-time browser base
+    "API_BASE_URL",
+    "NEXT_PUBLIC_API_BASE",
+    # test harness (make gate) — documented placeholders, never runtime config
+    "FUATILIA_TEST_DATABASE_URL",
+    "FUATILIA_TEST_PGBIN",
+    # Daraja (M-Pesa) client — backend-go/internal/daraja.ConfigFromEnv
+    "DARAJA_BASE_URL",
+    "DARAJA_CONSUMER_KEY",
+    "DARAJA_CONSUMER_SECRET",
 }
+# Never required as .env keys: managed by Next.js/the Dockerfiles, not by
+# operators.
+ENV_SCAN_EXCLUDED = {"NODE_ENV", "NEXT_OUTPUT", "PORT", "HOSTNAME"}
 SCRIPT_SUFFIXES = (".cjs", ".js", ".mjs", ".sql", ".sh")
 
 failures: list[str] = []
@@ -131,7 +159,7 @@ def check_referenced_paths(doc: dict) -> None:
             dockerfile = build.get("dockerfile", "Dockerfile")
             df_path = ctx_path / dockerfile
             record(df_path.is_file(), f"services.{name}: dockerfile {ctx}/{dockerfile} exists")
-            if name in ("api", "worker"):
+            if name in ("api", "worker", "frontend"):
                 ignore = ctx_path / ".dockerignore"
                 record(
                     ignore.is_file(),
@@ -271,7 +299,40 @@ def check_dockerfile() -> set[str]:
         "HEALTHCHECK" in api_block and "/v1/health" in api_block and "/bin/busybox" in api_block,
         "api stage: HEALTHCHECK probes its own /v1/health (busybox wget — distroless has no shell)",
     )
+    record(
+        "HEALTHCHECK" in worker_block and "8222/healthz" in worker_block,
+        "worker stage: network-path HEALTHCHECK probes the NATS monitor /healthz",
+    )
     return names
+
+
+FRONTEND_DOCKERFILE = REPO / "frontend" / "Dockerfile"
+
+
+def check_frontend_dockerfile() -> None:
+    section("4b. frontend/Dockerfile structure (multi-stage standalone, pinned, non-root)")
+    text = FRONTEND_DOCKERFILE.read_text(encoding="utf-8")
+    stages = dockerfile_stages(text)
+    record(len(stages) >= 3, f"multi-stage build present ({len(stages)} stages: {', '.join(n for n, _, _ in stages)})")
+    for name, image, _ in stages:
+        pinned = ":" in image and not image.endswith(":latest")
+        record(pinned, f"stage {name}: base image {image!r} is pinned (no implicit/explicit :latest)")
+    build_block = next((b for n, _, b in stages if n == "build"), "")
+    runner_block = next((b for n, _, b in stages if n == "runner"), "")
+    record(bool(build_block) and "NEXT_OUTPUT=standalone" in build_block,
+           "build stage: NEXT_OUTPUT=standalone (opt-in standalone bundle, next.config.mjs)")
+    record("npm ci" in text, "deps stage: npm ci from the committed lockfile (no bare install)")
+    record("COPY --from=build /app/.next/standalone" in text
+           and "COPY --from=build /app/.next/static" in text,
+           "runner stage: standalone server + static assets are the only app payload")
+    record(bool(re.search(r"(?im)^\s*USER\s+node\s*$", runner_block)),
+           "runner stage: runs as non-root (USER node)")
+    record(bool(re.search(r"(?im)^\s*EXPOSE\s+3000\s*$", runner_block)),
+           "runner stage: declares EXPOSE 3000")
+    record("HEALTHCHECK" in runner_block and "127.0.0.1:3000" in runner_block,
+           "runner stage: HEALTHCHECK probes its own http://127.0.0.1:3000/")
+    record(bool(re.search(r"(?im)^\s*CMD\s+\[", runner_block)),
+           "runner stage: exec-form CMD (no shell wrapping)")
 
 
 # --------------------------------------------------------------------------
@@ -339,9 +400,19 @@ def check_graph_and_posture(doc: dict, dockerfile_stages_names: set[str]) -> Non
     )
 
     exposed = {name: (cfg.get("ports") or []) for name, cfg in services.items()}
-    offenders = {n: p for n, p in exposed.items() if n != "api" and p}
-    record(not offenders, f"only api exposes ports (offenders: {offenders or 'none'})")
+    offenders = {n: p for n, p in exposed.items() if n not in ("api", "frontend") and p}
+    record(not offenders, f"only api and frontend expose ports (offenders: {offenders or 'none'})")
     record(bool(exposed.get("api")), f"api publishes its port ({exposed.get('api')})")
+    record(bool(exposed.get("frontend")), f"frontend publishes its port ({exposed.get('frontend')})")
+    frontend_dep = depends_map(services["frontend"])
+    record(
+        frontend_dep.get("api") == "service_healthy",
+        "frontend depends_on api: service_healthy (the BFF's upstream must be serving)",
+    )
+    record(
+        worker_dep.get("nats") == "service_healthy",
+        "worker depends_on nats: service_healthy (monitor /healthz, not just started)",
+    )
     record(
         not any("expose" in (cfg or {}) for cfg in services.values()),
         "no service uses the redundant 'expose' key",
@@ -409,6 +480,15 @@ def check_graph_and_posture(doc: dict, dockerfile_stages_names: set[str]) -> Non
         any("pg_isready" in str(t) for t in pg_health),
         "postgres has a pg_isready healthcheck (gates api/worker startup)",
     )
+    nats_health = (services["nats"].get("healthcheck") or {}).get("test") or []
+    record(
+        any("healthz" in str(t) and "8222" in str(t) for t in nats_health),
+        "nats has a monitor /healthz healthcheck on the internal port 8222",
+    )
+    record(
+        not services["frontend"].get("healthcheck"),
+        "frontend carries no compose-level healthcheck (the image's own probes 127.0.0.1:3000)",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -416,7 +496,13 @@ def check_graph_and_posture(doc: dict, dockerfile_stages_names: set[str]) -> Non
 # --------------------------------------------------------------------------
 ENV_KEY_RE = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=")
 COMPOSE_REF_RE = re.compile(r"(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)")
-GO_ENV_RE = re.compile(r"os\.(?:Getenv|LookupEnv)\(\s*\"([A-Za-z0-9_]+)\"")
+# Direct literal reads: os.Getenv("X") / os.LookupEnv("X") — and the
+# infra.LoadConfig style env("X") reader (cmd/api passes os.Getenv in as a
+# function parameter, so the variable name only appears at the call site).
+GO_ENV_RE = re.compile(r"(?:os\.(?:Getenv|LookupEnv)|\benv)\(\s*\"([A-Za-z0-9_]+)\"\s*\)")
+# The worker's getenv(envXxx) pattern: envXxx = "NAME" constants.
+GO_ENV_CONST_RE = re.compile(r"(?m)^\s*env[A-Za-z0-9]*\s*=\s*\"([A-Z][A-Z0-9_]+)\"")
+NODE_ENV_RE = re.compile(r"process\.env\.([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def env_example_keys() -> dict[str, str]:
@@ -432,7 +518,7 @@ def env_example_keys() -> dict[str, str]:
 
 
 def check_env_contract(doc: dict, raw_compose: str) -> None:
-    section("7. environment contract (.env.example ⊇ compose refs ∪ backend-go reads)")
+    section("7. environment contract (.env.example ⊇ compose refs ∪ code reads)")
     keys = env_example_keys()
     record(bool(keys), f".env.example parses ({len(keys)} keys)")
 
@@ -443,11 +529,31 @@ def check_env_contract(doc: dict, raw_compose: str) -> None:
     for go in sorted(BACKEND_GO.rglob("*.go")):
         if go.name.endswith("_test.go"):
             continue
-        go_reads |= set(GO_ENV_RE.findall(go.read_text(encoding="utf-8")))
+        text = go.read_text(encoding="utf-8")
+        go_reads |= set(GO_ENV_RE.findall(text))
+        go_reads |= set(GO_ENV_CONST_RE.findall(text))
+    go_reads -= ENV_SCAN_EXCLUDED
     record(
         True,
-        f"backend-go Go sources read {len(go_reads)} env var(s) via os.Getenv/LookupEnv: "
-        f"{sorted(go_reads) or '(none yet — cmd lanes pending)'}",
+        f"backend-go Go sources read {len(go_reads)} env var(s) (os.Getenv/LookupEnv, env(…), getenv constants): "
+        f"{sorted(go_reads) or '(none)'}",
+    )
+
+    db_reads: set[str] = set()
+    for cjs in sorted((REPO / "db").glob("*.cjs")):
+        db_reads |= set(NODE_ENV_RE.findall(cjs.read_text(encoding="utf-8")))
+    db_reads -= ENV_SCAN_EXCLUDED
+    record(True, f"db tooling reads {len(db_reads)} env var(s) (process.env in db/*.cjs): {sorted(db_reads) or '(none)'}")
+
+    fe_reads: set[str] = set()
+    fe_src = REPO / "frontend" / "src"
+    for fe in sorted(fe_src.rglob("*.ts")) + sorted(fe_src.rglob("*.tsx")):
+        fe_reads |= set(NODE_ENV_RE.findall(fe.read_text(encoding="utf-8")))
+    fe_reads -= ENV_SCAN_EXCLUDED
+    record(
+        True,
+        f"frontend reads {len(fe_reads)} env var(s) (process.env in frontend/src, NODE_ENV excluded): "
+        f"{sorted(fe_reads) or '(none)'}",
     )
 
     required_missing = REQUIRED_ENV_KEYS - set(keys)
@@ -456,10 +562,10 @@ def check_env_contract(doc: dict, raw_compose: str) -> None:
         f".env.example carries every contract key ({sorted(required_missing) or 'all present'})",
     )
 
-    drift = (compose_refs | go_reads) - set(keys)
+    drift = (compose_refs | go_reads | db_reads | fe_reads) - set(keys)
     record(
         not drift,
-        f"no drift: compose refs ∪ backend-go reads ⊆ .env.example keys (missing: {sorted(drift) or 'none'})",
+        f"no drift: compose refs ∪ Go/db/frontend reads ⊆ .env.example keys (missing: {sorted(drift) or 'none'})",
     )
 
     values = keys
@@ -493,6 +599,7 @@ def main() -> int:
     check_referenced_paths(doc)
     check_pending_lanes(args.allow_pending_lanes)
     stage_names = check_dockerfile()
+    check_frontend_dockerfile()
     check_graph_and_posture(doc, stage_names)
     check_env_contract(doc, raw)
 
