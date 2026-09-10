@@ -226,7 +226,7 @@ export const createRequestIdMinter = (
   let counter = 0;
   return () => {
     counter += 1;
-    const at = assertEtimsClock(clock).toISOString().replace(/[-:.]/g, '').slice(0, 14);
+    const at = assertEtimsClock(clock).toISOString().replace(/[^0-9]/g, '').slice(0, 14);
     return `${prefix}-${at}-${String(counter).padStart(4, '0')}`;
   };
 };
