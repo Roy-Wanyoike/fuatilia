@@ -17,7 +17,10 @@ import (
 
 const (
 	testShortCode = "174379"
-	testPasskey   = "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919"
+	// Deliberately NOT the public sandbox passkey: real credentials never
+	// belong in code, even well-known demo ones — tests inject a placeholder
+	// and the service layer injects the passkey from its own secret source.
+	testPasskey = "test-passkey-not-a-secret"
 )
 
 // validSTKRequest is the shared happy-path initiation request.
@@ -42,6 +45,7 @@ func oauthScript(f *fakeServer, token string, expiresIn string) {
 }
 
 func TestOAuthTokenLifecycle(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok-1", "3600")
 	clock := newFakeClock(time.Date(2026, 9, 8, 10, 0, 0, 0, eatLocation))
@@ -76,6 +80,7 @@ func TestOAuthTokenLifecycle(t *testing.T) {
 }
 
 func TestOAuthFailures(t *testing.T) {
+	t.Parallel()
 	t.Run("bad credentials are AUTH_FAILED and not retried", func(t *testing.T) {
 		f := newFakeServer(t)
 		f.script("/oauth/v1/generate", scriptedResponse{status: 400, body: map[string]string{"error": "bad_request"}})
@@ -102,6 +107,7 @@ func TestOAuthFailures(t *testing.T) {
 }
 
 func TestOAuthSingleFlight(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok-concurrent", "3600")
 	c := f.client(t, nil)
@@ -129,6 +135,7 @@ func TestOAuthSingleFlight(t *testing.T) {
 }
 
 func TestRetryPolicy(t *testing.T) {
+	t.Parallel()
 	pushPath := "/mpesa/stkpush/v1/processrequest"
 	pushOK := scriptedResponse{status: 200, body: map[string]string{
 		"ResponseCode": "0", "CheckoutRequestID": "ws_CO_abcdefgh", "MerchantRequestID": "m-2",
@@ -229,6 +236,7 @@ func (failingDoer) Do(*http.Request) (*http.Response, error) {
 }
 
 func TestContextDeadline(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	c := f.client(t, nil)
@@ -242,6 +250,7 @@ func TestContextDeadline(t *testing.T) {
 }
 
 func TestSTKRequestValidation(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		mutate   func(*STKInitiate)
@@ -275,6 +284,7 @@ func TestSTKRequestValidation(t *testing.T) {
 }
 
 func TestSTKInitiateWireShape(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	f.script("/mpesa/stkpush/v1/processrequest",
@@ -307,6 +317,7 @@ func TestSTKInitiateWireShape(t *testing.T) {
 }
 
 func TestSTKInFlightGuard(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	release := make(chan struct{})
@@ -351,6 +362,9 @@ func TestSTKInFlightGuard(t *testing.T) {
 		}
 		var de *Error
 		if errors.As(err, &de) && de.Code == CodeDuplicateInFlight {
+			if de.Kind != KindBusy {
+				t.Errorf("duplicate refusal kind = %s, want busy", de.Kind)
+			}
 			followers++
 		}
 	}
@@ -363,6 +377,7 @@ func TestSTKInFlightGuard(t *testing.T) {
 }
 
 func TestQuerySTKAndOtherEndpoints(t *testing.T) {
+	t.Parallel()
 	t.Run("query STK", func(t *testing.T) {
 		f := newFakeServer(t)
 		oauthScript(f, "tok", "3600")
@@ -399,7 +414,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		}})
 		c := f.client(t, nil)
 		rc, err := c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "BusinessPayment",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "BusinessPayment",
 			AmountMinor: 150_000, PartyB: "254712345678", Remarks: "supplier payout",
 			QueueTimeOutURL: "https://api.example.co.ke/b2c/timeout", ResultURL: "https://api.example.co.ke/b2c/result",
 			Occasion: "payout",
@@ -416,7 +431,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		oauthScript(f, "tok", "3600")
 		c := f.client(t, nil)
 		_, err := c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "GiftMoney",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "GiftMoney",
 			AmountMinor: 100, PartyB: "254712345678",
 		}, "k")
 		var de *Error
@@ -424,7 +439,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 			t.Fatalf("bad CommandID: want CONFIG_INVALID, got %v", err)
 		}
 		_, err = c.InitiateB2C(context.Background(), B2CInitiate{
-			InitiatorName: "testapi", SecurityCredential: "cred", CommandID: "BusinessPayment",
+			InitiatorName: "test-initiator", SecurityCredential: "cred", CommandID: "BusinessPayment",
 			AmountMinor: 100_050, PartyB: "254712345678",
 		}, "k2")
 		if !errors.As(err, &de) || de.Code != CodeAmountNotWholeShilling {
@@ -435,7 +450,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 		f := newFakeServer(t)
 		oauthScript(f, "tok", "3600")
 		c := f.client(t, nil)
-		_, err := c.QueryTransactionStatus(context.Background(), "SBX12345", "testapi", "cred", "https://x.example")
+		_, err := c.QueryTransactionStatus(context.Background(), "SBX12345", "test-initiator", "cred", "https://x.example")
 		var de *Error
 		if !errors.As(err, &de) || de.Code != CodeTransIDMalformed {
 			t.Fatalf("lowercase id must be refused, got %v", err)
@@ -444,7 +459,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 			"OriginatorConversationID": "o-1", "ConversationID": "c-1", "ResponseCode": "0",
 			"ResponseDescription": "ok",
 		}})
-		if _, err := c.QueryTransactionStatus(context.Background(), "SBK41XQ7RT", "testapi", "cred", "https://x.example"); err != nil {
+		if _, err := c.QueryTransactionStatus(context.Background(), "SBK41XQ7RT", "test-initiator", "cred", "https://x.example"); err != nil {
 			t.Fatalf("valid id: %v", err)
 		}
 	})
@@ -474,6 +489,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
+	t.Parallel()
 	t.Run("missing credentials refused", func(t *testing.T) {
 		_, err := ConfigFromEnv(func(k string) string { return "" })
 		if err == nil {

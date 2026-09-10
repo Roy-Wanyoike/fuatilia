@@ -4,35 +4,38 @@
 // int64, plus the whole-shilling rule for initiation payloads.
 package daraja
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// wireDecimalPattern is the TS lane's DECIMAL_PATTERN one-for-one
+// (`^(0|[1-9]\d*)(?:\.(\d{1,2}))?$`): at most 2 minor places, and the
+// integer part is "0" or starts with a non-zero digit — so ".50", "2500."
+// and "02500" are REFUSED, never coerced into money.
+var wireDecimalPattern = regexp.MustCompile(`^(0|[1-9]\d*)(?:\.(\d{1,2}))?$`)
 
 // parseWireAmountMinor parses a Daraja decimal amount string ("2500.00",
 // "2500", "2500.5") into integer minor units (KES cents) WITHOUT any float
-// arithmetic. Refusals carry DARAJA_AMOUNT_* codes; a negative or malformed
-// value is refused, never coerced.
+// arithmetic. Refusals carry DARAJA_AMOUNT_* codes; a negative, malformed or
+// over-precise value is refused, never coerced.
 func parseWireAmountMinor(raw string) (int64, error) {
+	// Mirror the TS lane exactly: trim, then match DECIMAL_PATTERN — an empty
+	// (or whitespace-only) input simply fails the pattern. The AMOUNT_REQUIRED
+	// distinction belongs to the caller (a MISSING TransAmount), never here.
 	s := strings.TrimSpace(raw)
-	if s == "" {
-		return 0, errf(CodeAmountRequired, "amount is required")
-	}
 	if strings.HasPrefix(s, "-") {
 		return 0, errf(CodeAmountMalformed, "amount %q is negative — wire amounts are credits", raw)
 	}
-	intPart := s
-	fracPart := ""
-	if dot := strings.IndexByte(s, '.'); dot >= 0 {
-		intPart, fracPart = s[:dot], s[dot+1:]
-	}
-	if intPart == "" && fracPart == "" {
-		return 0, errf(CodeAmountMalformed, "amount %q is not a decimal string", raw)
+	m := wireDecimalPattern.FindStringSubmatch(s)
+	if m == nil {
+		return 0, errf(CodeAmountMalformed,
+			"amount %q is not a decimal with at most 2 minor places (leading zeros and dangling points are refused)", raw)
 	}
 	// Whole shillings first, then shift into minor units with an overflow
 	// check BEFORE the shift (the wire is KES; minor units are cents).
 	var whole int64
-	for _, c := range intPart {
-		if c < '0' || c > '9' {
-			return 0, errf(CodeAmountMalformed, "amount %q has a non-digit in its integer part", raw)
-		}
+	for _, c := range m[1] {
 		d := int64(c - '0')
 		if whole > ((1<<62)-d)/10 {
 			return 0, errf(CodeAmountMalformed, "amount %q overflows minor units", raw)
@@ -43,22 +46,11 @@ func parseWireAmountMinor(raw string) (int64, error) {
 		return 0, errf(CodeAmountMalformed, "amount %q overflows minor units", raw)
 	}
 	minor := whole * 100
-	switch len(fracPart) {
-	case 0:
-	case 1, 2:
-		f := int64(0)
-		for _, c := range fracPart {
-			if c < '0' || c > '9' {
-				return 0, errf(CodeAmountMalformed, "amount %q has a non-digit in its fraction part", raw)
-			}
-			f = f*10 + int64(c-'0')
+	if frac := m[2]; frac != "" {
+		if len(frac) == 1 {
+			frac += "0"
 		}
-		if len(fracPart) == 1 {
-			f *= 10
-		}
-		minor += f
-	default:
-		return 0, errf(CodeAmountMalformed, "amount %q carries more than 2 fraction digits (wire contract is KES)", raw)
+		minor += int64(frac[0]-'0')*10 + int64(frac[1]-'0')
 	}
 	return minor, nil
 }
