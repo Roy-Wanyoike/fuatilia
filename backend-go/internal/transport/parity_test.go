@@ -33,8 +33,8 @@ func TestServedRoutesMatchOpenAPI(t *testing.T) {
 	if len(served) != len(specRoutes) {
 		t.Fatalf("route count drift: OpenAPI declares %d operations, the kernel serves %d", len(specRoutes), len(served))
 	}
-	if len(specRoutes) != 22 {
-		t.Fatalf("OpenAPI operation count changed: expected the 22 mounted ops, yaml declares %d — update this test with the contract deliberately", len(specRoutes))
+	if len(specRoutes) != 27 {
+		t.Fatalf("OpenAPI operation count changed: expected the 27 mounted ops, yaml declares %d — update this test with the contract deliberately", len(specRoutes))
 	}
 
 	var missing, extra []string
@@ -88,7 +88,7 @@ func TestMetaCapabilityList(t *testing.T) {
 	if body.Data.Name != "fuatilia" || body.Data.APIVersion != "v1" {
 		t.Fatalf("meta identity drift: %+v", body.Data)
 	}
-	want := []string{"auth", "collections", "payments", "receivables"}
+	want := []string{"adjustments", "auth", "collections", "ledger", "payments", "receivables"}
 	if strings.Join(body.Data.Capabilities, ",") != strings.Join(want, ",") {
 		t.Fatalf("capability list drift: got %v want %v", body.Data.Capabilities, want)
 	}

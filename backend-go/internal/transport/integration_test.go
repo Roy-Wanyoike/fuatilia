@@ -133,6 +133,7 @@ func seedWorld(t *testing.T, pool *pgxpool.Pool) *world {
 		w.OrgID, "admin-"+slug(t), []string{
 			"admin:manage-users", "receivables:read", "payments:read", "payments:intake",
 			"payments:refund", "collections:read", "collections:act",
+			"ledger:read", "adjustments:request",
 		})
 	mustExecNoReturn(t, pool, `INSERT INTO role_assignments (org_id, kind, user_id, role_id, granted_by)
                 VALUES ($1, 'grant', $2, $3, $4)`, w.OrgID, w.AdminID, adminRole, w.RootID)
@@ -142,7 +143,8 @@ func seedWorld(t *testing.T, pool *pgxpool.Pool) *world {
                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING key_id::text`,
 		w.OrgID, "admin-key", w.AdminID, secret[:8], sha256Hex(secret),
 		[]string{"admin:manage-users", "receivables:read", "payments:read", "payments:intake",
-			"payments:refund", "collections:read", "collections:act"})
+			"payments:refund", "collections:read", "collections:act",
+			"ledger:read", "adjustments:request"})
 	w.AdminToken = "ApiKey " + w.AdminKeyID + "." + secret
 	return w
 }
@@ -322,6 +324,13 @@ func servedRows(t *testing.T, server *httptest.Server, w *world, pool *pgxpool.P
 		{method: "POST", path: "/v1/collections/cases/" + caseID + "/escalations", body: map[string]any{"to": "high", "reason": "aging"}},
 		{method: "POST", path: "/v1/collections/cases/" + caseID + "/actions", body: map[string]any{"type": "call", "scheduledFor": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)}},
 		{method: "POST", path: "/v1/collections/cases/" + caseID + "/actions/" + infra.NewUUID() + "/completions", body: map[string]any{"outcome": "reached"}},
+		// ledger + adjustments (issue #132) — the read surface and the
+		// two dry-run intent evaluators; anonymous access still refuses 401.
+		{method: "GET", path: "/v1/ledger/accounts"},
+		{method: "GET", path: "/v1/ledger/entries"},
+		{method: "GET", path: "/v1/adjustments"},
+		{method: "POST", path: "/v1/adjustments/credit-notes", body: creditNoteBody(infra.NewUUID(), "goodwill", 500)},
+		{method: "POST", path: "/v1/adjustments/refund-reservations", body: refundIntentBody(paymentID, 100, "goodwill")},
 	}
 }
 
@@ -594,4 +603,23 @@ func moneyBody(minor int64) map[string]any {
 
 func refundBody(minor int64, reason string) map[string]any {
 	return map[string]any{"amount": map[string]any{"minor": minor, "currency": "KES"}, "reason": reason}
+}
+
+// creditNoteBody is the POST /v1/adjustments/credit-notes proposal shape
+// (issue #132) — total carries any sign; blankness is the lane's refusal.
+func creditNoteBody(customerID, reason string, minor int64) map[string]any {
+	return map[string]any{
+		"customerId": customerID, "reason": reason,
+		"total": map[string]any{"minor": minor, "currency": "KES"},
+	}
+}
+
+// refundIntentBody is the POST /v1/adjustments/refund-reservations proposal
+// shape (issue #132).
+func refundIntentBody(paymentID string, minor int64, reason string) map[string]any {
+	return map[string]any{
+		"paymentId": paymentID,
+		"amount":    map[string]any{"minor": minor, "currency": "KES"},
+		"reason":    reason,
+	}
 }
