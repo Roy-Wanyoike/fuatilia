@@ -146,6 +146,14 @@ services:
       OUTBOX_BATCH: ${OUTBOX_BATCH:-100}
       OUTBOX_POLL_INTERVAL: ${OUTBOX_POLL_INTERVAL:-1s}
       OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-5}
+      # Webhook delivery loop (issue #177), env-gated and OFF by default so
+      # the example stack boots without secrets. Set WEBHOOKS_ENABLED=1 AND
+      # provision WEBHOOK_SIGNING_SECRETS (per-endpoint
+      # <orgUUID>:<endpointUUID>:<secret> entries) to boot it — enabled with
+      # no usable secret is a boot failure (fail closed; the schema stores
+      # endpoint secrets hashed only, docs/security/secrets.md).
+      WEBHOOKS_ENABLED: ${WEBHOOKS_ENABLED:-0}
+      WEBHOOK_SIGNING_SECRETS: ${WEBHOOK_SIGNING_SECRETS:-}
     depends_on:
       nats:
         condition: service_healthy
