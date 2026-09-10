@@ -104,9 +104,9 @@ describe('SignInForm', () => {
   });
 
   it('shows the submitting state while validating (input locked, no double submit)', async () => {
-    let releaseValidation: ((response: Response) => void) | null = null;
+    const gateRef: { release?: (response: Response) => void } = {};
     const gate = new Promise<Response>((resolve) => {
-      releaseValidation = resolve;
+      gateRef.release = resolve;
     });
     vi.stubGlobal(
       'fetch',
@@ -119,7 +119,7 @@ describe('SignInForm', () => {
     expect(button).toBeDisabled();
     expect(screen.getByLabelText('Session credential')).toBeDisabled();
 
-    releaseValidation?.(jsonResponse(200, { data: { accepted: true } }));
+    gateRef.release?.(jsonResponse(200, { data: { accepted: true } }));
     await waitFor(() => {
       expect(replace).toHaveBeenCalledOnce();
     });
