@@ -1,12 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CaseListView } from '@/app/(dashboard)/collections/_components/case-list-view';
 import { OpenCasePanel } from '@/app/(dashboard)/collections/_components/open-case-panel';
 import { CaseRecordActionPanel } from '@/app/(dashboard)/collections/_components/case-record-action-panel';
 import { CaseCompleteActionPanel } from '@/app/(dashboard)/collections/_components/case-complete-action-panel';
+import { CustomerDirectory } from '@/app/(dashboard)/customers/_components/customer-directory';
 import { QueryProviders } from '@/providers/query-provider';
 import { createFuatiliaClient, type FetchLike } from '@/lib/api/client';
 import { caseListEmptyExample, specCase } from '@/lib/api/fixtures/collections';
+import { paymentListEmptyExample } from '@/lib/api/fixtures/payments';
+import { receivableListEmptyExample } from '@/lib/api/fixtures/receivables';
 import { PortalI18nProvider } from '@/lib/portal-i18n/context';
 
 // =============================================================================
@@ -82,5 +85,26 @@ describe('dashboard rendering in Kiswahili (#180)', () => {
     expect(screen.getByTestId('case-complete-action-empty')).toHaveTextContent(
       'Hakuna hatua zilizorekodiwa kwenye kesa hii bado',
     );
+  });
+
+  it('renders the customer directory in sw from empty read models', async () => {
+    const fetchImpl: FetchLike = async (input) => {
+      const url = String(input);
+      if (url.includes('/v1/receivables')) {
+        return jsonResponse(200, receivableListEmptyExample);
+      }
+      if (url.includes('/v1/payments')) {
+        return jsonResponse(200, paymentListEmptyExample);
+      }
+      return jsonResponse(404, { error: { code: 'HTTP_NOT_FOUND', message: 'no route' } });
+    };
+    vi.stubGlobal('fetch', fetchImpl);
+    renderInSw(<CustomerDirectory />);
+
+    expect(screen.getByRole('region', { name: 'Orodha ya wateja' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('empty-state')).toHaveTextContent('Hakuna shughuli za wateja bado');
+    });
+    vi.unstubAllGlobals();
   });
 });

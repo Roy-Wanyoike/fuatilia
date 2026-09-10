@@ -184,6 +184,16 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
     expect(translate(en, 'dashboard.customers.directory.overdueCount', { count: 1 })).toBe(
       '1 overdue',
     );
+    expect(translate(en, 'dashboard.customers.directory.mixedCurrencyCountOnly')).toBe(
+      'mixed currencies — count only (R10)',
+    );
+    expect(
+      translate(en, 'dashboard.customers.c360.openCaseCountSuffix', { total: 3 }),
+    ).toBe('open (3 total incl. resolved/closed)');
+    expect(translate(en, 'dashboard.customers.c360.stats.heldOnAccount')).toBe('held on account');
+    expect(
+      translate(en, 'dashboard.customers.c360.paymentRow.appliedTo', { id: 'rcv-1' }),
+    ).toBe('applied to receivable rcv-1');
     expect(translate(en, 'dashboard.customers.c360.overdueBadge')).toBe('overdue');
     expect(translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('due now');
   });
