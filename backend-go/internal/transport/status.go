@@ -15,19 +15,22 @@ const (
 	CodeRouteNotFound    = "HTTP_ROUTE_NOT_FOUND"
 	CodeMethodNotAllowed = "HTTP_METHOD_NOT_ALLOWED"
 	CodeUnauthenticated  = "HTTP_UNAUTHENTICATED"
+	CodeRateLimited      = "HTTP_RATE_LIMITED"
 	CodeInternalError    = "HTTP_INTERNAL_ERROR"
 )
 
 // exactStatus is the EXACT override table (evaluated first — e.g.
 // KEY_SECRET_MISMATCH maps to 401 even though the suffix rule says 409).
 var exactStatus = map[string]int{
-	CodePayloadTooLarge:         413,
-	CodeBodyMalformed:           400,
-	CodeBodyInvalid:             400,
-	CodeQueryInvalid:            400,
-	CodeRouteNotFound:           404,
-	CodeMethodNotAllowed:        405,
-	CodeUnauthenticated:         401,
+	CodePayloadTooLarge:  413,
+	CodeBodyMalformed:    400,
+	CodeBodyInvalid:      400,
+	CodeQueryInvalid:     400,
+	CodeRouteNotFound:    404,
+	CodeMethodNotAllowed: 405,
+	CodeUnauthenticated:  401,
+	// Rate limiting (issue #130): the token bucket's refusal (RFC 6585).
+	CodeRateLimited:             429,
 	"HTTP_USER_NOT_FOUND":       404,
 	"HTTP_ROLE_NOT_FOUND":       404,
 	"HTTP_SESSION_NOT_FOUND":    404,

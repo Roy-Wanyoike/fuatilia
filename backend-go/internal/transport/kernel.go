@@ -66,6 +66,17 @@ type KernelOptions struct {
 	// OnError is the observability sink for unmapped/internal errors — the
 	// response body never carries them.
 	OnError func(err error, requestID string)
+	// Limits sizes the per-identity+IP token-bucket rate limiter (issue
+	// #130). The zero value DISABLES rate limiting: compositions that
+	// leave it unset keep byte-identical wire behavior.
+	Limits RateLimitConfig
+	// LimitStore overrides the limiter STATE port (nil → the in-memory
+	// default). The store receives every Take with the kernel's clock —
+	// a deployment binds a cluster-wide store here; tests bind fakes.
+	LimitStore RateLimitStore
+	// SecurityHeaders hardens every response (issue #130). The zero value
+	// applies the four unconditional headers; only HSTS is flag-gated.
+	SecurityHeaders SecurityHeaders
 }
 
 // Kernel is the HTTP kernel: the mounted route table plus handle.
@@ -78,6 +89,8 @@ type Kernel struct {
 	maxBodyBytes int64
 	log          *slog.Logger
 	onError      func(err error, requestID string)
+	limiter      RateLimitStore // nil when limiting is off (Limits disabled)
+	security     SecurityHeaders
 }
 
 // NewKernel compiles + validates the route table (a broken row is a boot
@@ -108,7 +121,22 @@ func NewKernel(options KernelOptions) (*Kernel, error) {
 		maxBodyBytes: options.MaxBodyBytes,
 		log:          options.Log,
 		onError:      options.OnError,
+		security:     options.SecurityHeaders.normalized(),
+		limiter:      limiterFor(options),
 	}, nil
+}
+
+// limiterFor resolves the limiter STATE for the composition: the bound port
+// wins when one is configured, else the in-memory default; a disabled
+// configuration returns nil (no limiter state is ever constructed unused).
+func limiterFor(options KernelOptions) RateLimitStore {
+	if !options.Limits.enabled() {
+		return nil
+	}
+	if options.LimitStore != nil {
+		return options.LimitStore
+	}
+	return NewInMemoryRateLimitStore(options.Limits)
 }
 
 // DefaultMaxBodyBytes is the kernel's JSON body cap (kernel/body.ts: 1 MiB).
@@ -118,9 +146,12 @@ const DefaultMaxBodyBytes = 1_048_576
 func (k *Kernel) Table() []RouteRecord { return k.table }
 
 // ServeHTTP adapts net/http INTO the kernel pipeline (server.ts is the only
-// socket-aware piece in the TS lane; ServeHTTP is its Go twin).
+// socket-aware piece in the TS lane; ServeHTTP is its Go twin). The security
+// headers land BEFORE any byte is written so they ride EVERY response —
+// successes, envelope refusals, 429s and panic recoveries alike.
 func (k *Kernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	k.security.apply(w.Header())
 	requestID, org, status := k.handle(w, r)
 	k.log.Info("http.request",
 		slog.String("requestId", requestID),
@@ -180,6 +211,16 @@ func (k *Kernel) handle(w http.ResponseWriter, r *http.Request) (string, string,
 			methodNotAllowedMessage(method, r.URL.Path, match.allow), map[string]string{"Allow": strings.Join(match.allow, ", ")})
 	}
 
+	// Rate limiting (issue #130): public routes are the anonymous abuse
+	// surface the audit calls out — their bucket keys the client IP alone
+	// (the identity half is ""). Authed routes re-key per principal below,
+	// after authentication names the identity that owns the budget.
+	if k.limiter != nil && match.route.record.Permission == "" {
+		if decision := k.limiter.Take(rateLimitKey("", clientIP(r.RemoteAddr)), k.clock.Now()); !decision.Allowed {
+			return requestID, org, refuse429(fail, decision)
+		}
+	}
+
 	var principal *auth.Principal
 	if permission := match.route.record.Permission; permission != "" {
 		authn := k.auth.Authenticate(r.Context(), headers["authorization"])
@@ -205,6 +246,16 @@ func (k *Kernel) handle(w http.ResponseWriter, r *http.Request) (string, string,
 		}
 		principal = &authn.Principal
 		org = principal.OrgID
+
+		// Rate limiting (issue #130): authed routes key the bucket per
+		// principal+IP — each principal owns an independent budget, and
+		// the IP half keeps principals sharing one egress address in
+		// distinct buckets too.
+		if k.limiter != nil {
+			if decision := k.limiter.Take(rateLimitKey(principal.PrincipalID, clientIP(r.RemoteAddr)), k.clock.Now()); !decision.Allowed {
+				return requestID, org, refuse429(fail, decision)
+			}
+		}
 	}
 
 	rc := &RequestContext{
@@ -243,6 +294,20 @@ func (k *Kernel) handle(w http.ResponseWriter, r *http.Request) (string, string,
 		return requestID, org, fail(500, CodeInternalError, "internal server error", nil)
 	}
 	return requestID, org, respond(result.Status, successShape{Data: result.Data, Meta: result.Meta}, nil)
+}
+
+// refuse429 renders the exhausted-bucket refusal: the §38 error envelope
+// (HTTP_RATE_LIMITED + requestId) with Retry-After in whole seconds — the
+// wait for one token to refill, floored at 1s (a custom store may report a
+// sub-second wait; the header's honest minimum is one second).
+func refuse429(fail func(status int, code, message string, extra map[string]string) int, decision RateLimitDecision) int {
+	seconds := int64(decision.RetryAfter / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	return fail(StatusForCode(CodeRateLimited), CodeRateLimited,
+		"rate limit exceeded for this identity — retry after "+itoa(seconds)+"s",
+		map[string]string{"Retry-After": itoa(seconds)})
 }
 
 // invoke runs one handler with panic recovery so a handler bug becomes the
