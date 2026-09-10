@@ -3,42 +3,47 @@
  * half of the `sequenceSource` port defined by `src/domain/consent/etims.ts`.
  *
  * The domain port is SYNCHRONOUS (`(count: number) => number[]`) and pure I/O
- * lives outside the core; this adapter is the outside. It works from a LOCAL
- * band of pre-granted sequences, so numbering survives KRA outages:
+ * lives outside the core; this adapter is the outside. It issues from LOCAL
+ * stock — a stack of contiguous KRA-granted bands — so numbering survives
+ * KRA outages:
  *
  *   refill()   (async, wiring-driven)  ── KRA VSDC ──▶ a contiguous band of
  *                                                      sequences is granted
  *                                                      (bandId, from, to) and
- *                                                      persisted as the
+ *                                                      stacked on the local
  *                                                      checkpoint.
  *   reserve(count)  (sync, the port)   ── local only ─▶ sequences are carved
- *                                                      off the checkpoint and
+ *                                                      off the stack and
  *                                                      handed to the domain
  *                                                      formatter. NO network.
  *
  * GAP HANDLING (documented contract — the eTIMS rule is that `invcNo` is a
  * monotonic sequence, never an identifier):
- *   1. Contiguity is structural. A new band for a year is accepted ONLY when
- *      it starts exactly at the previous band's end + 1; the first band of a
+ *   1. Contiguity is structural. Bands stack: every new band for a year must
+ *      start exactly at the previous band's end + 1, and the first band of a
  *      year must start at 1. KRA grants that break gapless contiguity are
- *      REFUSED (ETIMS_VSDC_BAND_NONCONTIGUOUS), audited, never activated.
+ *      REFUSED (ETIMS_VSDC_BAND_NONCONTIGUOUS), audited, never activated —
+ *      a gap cannot be patched after the fact, so it is never allowed to
+ *      open.
  *   2. Outages never create gaps. When the VSDC is unreachable the source
  *      keeps issuing from remaining stock; when stock runs dry it refuses
  *      (ETIMS_STOCK_EXHAUSTED) and queues a refill intent (audited) — it
- *      NEVER borrows from an ungranted range, skips ahead, or reuses numbers.
- *      The wiring retries refill(); the queued intent is served when KRA
- *      returns, and numbering continues exactly where it stopped.
+ *      NEVER borrows from an ungranted range, skips ahead, or reuses
+ *      numbers. The wiring retries refill(); numbering resumes exactly
+ *      where it stopped when KRA returns.
  *   3. Lost responses are reconciled conservatively. If a refill's HTTP
  *      response is lost after KRA granted a band, the next refill expects
- *      `bandEnd + 1`; a replay of the SAME grantId is an idempotent no-op, a
- *      DIFFERENT (later) band is refused as non-contiguous — the hole must be
- *      reconciled with KRA out-of-band, not papered over with a jump.
+ *      `last.to + 1`; a replay of an already-held grantId is an idempotent
+ *      no-op, a DIFFERENT (later) band is refused as non-contiguous — the
+ *      hole must be reconciled with KRA out-of-band, not papered over with
+ *      a jump.
  *   4. Year rollovers burn, never blend. Bands are year-scoped; when the
- *      clock year moves past the active band's year the remaining stock is
- *      BURNED (audited with reason YEAR_ROLLOVER) and numbering for the new
- *      year resumes only after a new-year band is granted (from = 1). The
- *      year prefix of an issued number therefore always matches the band the
- *      sequence was granted under.
+ *      clock year moves past the checkpoint's year, ALL remaining stock —
+ *      the active band's tail AND any queued bands — is BURNED (one audited
+ *      `burned` event per band, reason YEAR_ROLLOVER) and numbering for the
+ *      new year resumes only after a new-year band is granted (from = 1).
+ *      The year prefix of an issued number therefore always matches the
+ *      year its sequence was granted under.
  *   5. Write-ahead reservation. The checkpoint is persisted BEFORE numbers
  *      are handed out — a crash between persist and hand-out can burn tail
  *      sequences but can never double-issue one. If the audit write then
@@ -63,11 +68,7 @@
 import { DomainError, type Clock } from '../../domain/shared';
 import { ETIMS_ERRORS } from './codes';
 import { assertEtimsClock, type EtimsConfig } from './config';
-import {
-  createRequestIdMinter,
-  type VsdcSequenceClient,
-  type VsdcBandResult,
-} from './client';
+import { createRequestIdMinter, type VsdcBandResult, type VsdcSequenceClient } from './client';
 import { ETIMS_MAX_SEQUENCE } from './wire';
 
 // --- ports ---------------------------------------------------------------------
@@ -84,23 +85,33 @@ export interface SequenceCheckpointStore {
   save(next: SequenceCheckpoint): void;
 }
 
-/**
- * Where the next issuance stands. `bandId: ''` means "no active band" (then
- * `year` is 0 and `next === bandEnd === 0`). Otherwise:
- *   - `year`    — the issuance year the band was granted for;
- *   - `next`    — the next sequence to issue (inclusive);
- *   - `bandEnd` — one PAST the band's last sequence (exclusive).
- */
-export interface SequenceCheckpoint {
+/** One granted band of sequences, inclusive on both ends. */
+export interface SequenceBand {
   readonly bandId: string;
-  readonly year: number;
-  readonly next: number;
-  readonly bandEnd: number;
+  readonly from: number;
+  readonly to: number;
 }
 
-export const EMPTY_CHECKPOINT: SequenceCheckpoint = { bandId: '', year: 0, next: 0, bandEnd: 0 };
+/**
+ * Where the next issuance stands.
+ *   - `year`  — the issuance year every stacked band was granted for (0 when
+ *     no band is active);
+ *   - `next`  — the next sequence to issue (0 when no band is active);
+ *   - `bands` — granted-but-not-fully-consumed bands in issuance order.
+ * With contiguity enforced, the stack is one gapless range: `bands[0]` holds
+ * `next`, and `bands[i+1].from === bands[i].to + 1`.
+ */
+export interface SequenceCheckpoint {
+  readonly year: number;
+  readonly next: number;
+  readonly bands: readonly SequenceBand[];
+}
+
+export const EMPTY_CHECKPOINT: SequenceCheckpoint = { year: 0, next: 0, bands: [] };
 
 const BAND_ID_PATTERN = /^[0-9A-Za-z][0-9A-Za-z-]{5,63}$/;
+
+const isSafeInt = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
 
 /**
  * Validate an UNTRUSTED checkpoint (it may come from a corrupted row, a
@@ -114,41 +125,73 @@ export const validateCheckpoint = (raw: unknown): SequenceCheckpoint => {
     throw new DomainError(ETIMS_ERRORS.CHECKPOINT_INVALID, `checkpoint must be an object, got ${typeof raw}`);
   }
   const record = raw as Partial<SequenceCheckpoint>;
-  const bandId = record.bandId;
   const year = record.year;
   const next = record.next;
-  const bandEnd = record.bandEnd;
-  const int = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
+  const bands = record.bands;
 
-  if (bandId === '') {
-    // The empty checkpoint must be exactly empty — no half-initialized rows.
-    if (year !== 0 || next !== 0 || bandEnd !== 0) {
+  if (!Array.isArray(bands)) {
+    throw new DomainError(ETIMS_ERRORS.CHECKPOINT_INVALID, `checkpoint bands must be an array, got ${typeof bands}`);
+  }
+  if (bands.length === 0) {
+    if (year !== 0 || next !== 0) {
       throw new DomainError(
         ETIMS_ERRORS.CHECKPOINT_INVALID,
-        `empty checkpoint must carry year=0 next=0 bandEnd=0, got ${JSON.stringify({ year, next, bandEnd })}`,
+        `an empty band stack must carry year=0 next=0, got ${JSON.stringify({ year, next })}`,
       );
     }
     return EMPTY_CHECKPOINT;
   }
-  if (typeof bandId !== 'string' || !BAND_ID_PATTERN.test(bandId)) {
-    throw new DomainError(ETIMS_ERRORS.CHECKPOINT_INVALID, `checkpoint bandId must be 6–64 grant-id characters, got ${String(bandId)}`);
-  }
-  if (!int(year) || year < 1000 || year > 9999) {
+
+  if (!isSafeInt(year) || year < 1000 || year > 9999) {
     throw new DomainError(ETIMS_ERRORS.CHECKPOINT_INVALID, `checkpoint year must be a 4-digit year, got ${String(year)}`);
   }
-  if (!int(bandEnd) || bandEnd < 1 || bandEnd > ETIMS_MAX_SEQUENCE + 1) {
+
+  const validated: SequenceBand[] = bands.map((band, index) => {
+    if (typeof band !== 'object' || band === null || Array.isArray(band)) {
+      throw new DomainError(ETIMS_ERRORS.CHECKPOINT_INVALID, `bands[${index}] must be an object`);
+    }
+    const candidate = band as Partial<SequenceBand>;
+    if (typeof candidate.bandId !== 'string' || !BAND_ID_PATTERN.test(candidate.bandId)) {
+      throw new DomainError(
+        ETIMS_ERRORS.CHECKPOINT_INVALID,
+        `bands[${index}].bandId must be 6–64 grant-id characters, got ${String(candidate.bandId)}`,
+      );
+    }
+    if (!isSafeInt(candidate.from) || candidate.from < 1 || candidate.from > ETIMS_MAX_SEQUENCE) {
+      throw new DomainError(
+        ETIMS_ERRORS.CHECKPOINT_INVALID,
+        `bands[${index}].from must be an integer in [1, ${ETIMS_MAX_SEQUENCE}], got ${String(candidate.from)}`,
+      );
+    }
+    if (!isSafeInt(candidate.to) || candidate.to < candidate.from || candidate.to > ETIMS_MAX_SEQUENCE) {
+      throw new DomainError(
+        ETIMS_ERRORS.CHECKPOINT_INVALID,
+        `bands[${index}].to must be an integer in [${String(candidate.from)}, ${ETIMS_MAX_SEQUENCE}], got ${String(candidate.to)}`,
+      );
+    }
+    return { bandId: candidate.bandId, from: candidate.from, to: candidate.to };
+  });
+
+  for (let i = 1; i < validated.length; i += 1) {
+    const previous = validated[i - 1]!;
+    const current = validated[i]!;
+    if (current.from !== previous.to + 1) {
+      throw new DomainError(
+        ETIMS_ERRORS.CHECKPOINT_INVALID,
+        `band stack must be contiguous: bands[${i}].from ${current.from} does not continue bands[${i - 1}].to ${previous.to}`,
+      );
+    }
+  }
+
+  const first = validated[0]!;
+  const last = validated[validated.length - 1]!;
+  if (!isSafeInt(next) || next < first.from || next > last.to) {
     throw new DomainError(
       ETIMS_ERRORS.CHECKPOINT_INVALID,
-      `checkpoint bandEnd must be an integer in [1, ${ETIMS_MAX_SEQUENCE + 1}], got ${String(bandEnd)}`,
+      `checkpoint next must be an integer within the band stack [${first.from}, ${last.to}], got ${String(next)}`,
     );
   }
-  if (!int(next) || next < 1 || next > bandEnd) {
-    throw new DomainError(
-      ETIMS_ERRORS.CHECKPOINT_INVALID,
-      `checkpoint next must be an integer in [1, ${bandEnd}], got ${String(next)}`,
-    );
-  }
-  return { bandId, year, next, bandEnd };
+  return { year, next, bands: validated };
 };
 
 // --- audit trail -----------------------------------------------------------------
@@ -206,13 +249,13 @@ export interface ReservationAuditTrail {
 /** Read-only observability over the source's state (drives the refill loop). */
 export interface SourceStats {
   readonly bandId: string;
-  /** The active band's issuance year (0 when no band is active). */
+  /** The active stack's issuance year (0 when no band is active). */
   readonly year: number;
   /** The clock's current year. */
   readonly clockYear: number;
   readonly stockRemaining: number;
   readonly lowWatermark: number;
-  /** True when the stock is at/below the watermark OR the year has rolled. */
+  /** True when the stock is below the watermark OR the year has rolled. */
   readonly needsRefill: boolean;
 }
 
@@ -255,8 +298,13 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
   const { config, client, store, audit, clock } = deps;
   const mintRequestId = createRequestIdMinter(clock);
 
-  const stockOf = (checkpoint: SequenceCheckpoint): number =>
-    checkpoint.bandId === '' ? 0 : checkpoint.bandEnd - checkpoint.next;
+  const loadCheckpoint = (): SequenceCheckpoint => validateCheckpoint(store.load());
+
+  const stockOf = (checkpoint: SequenceCheckpoint): number => {
+    if (checkpoint.bands.length === 0) return 0;
+    const last = checkpoint.bands[checkpoint.bands.length - 1]!;
+    return last.to - checkpoint.next + 1;
+  };
 
   const appendOrThrow = (event: ReservationAuditEvent, context: string): void => {
     try {
@@ -272,7 +320,47 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
     }
   };
 
-  const loadCheckpoint = (): SequenceCheckpoint => validateCheckpoint(store.load());
+  const assertClockYear = (): { now: Date; year: number } => {
+    const now = assertEtimsClock(clock);
+    const year = now.getUTCFullYear(); // UTC — same year basis as the domain formatter
+    if (year < 1000 || year > 9999) {
+      throw new DomainError(ETIMS_ERRORS.CLOCK_INVALID, `clock year must be a 4-digit year, got ${year}`, { year });
+    }
+    return { now, year };
+  };
+
+  /**
+   * Burn ALL stale-year stock (the active band's tail plus every queued
+   * band): one write-ahead save, one audited `burned` event per band. Used
+   * by reserve() and refill() alike — no path may silently drop a band.
+   */
+  const burnStaleYear = (checkpoint: SequenceCheckpoint, now: Date, year: number): SequenceCheckpoint => {
+    const burned: SequenceBand[] = [];
+    let cursor = checkpoint.next;
+    for (const band of checkpoint.bands) {
+      const from = Math.max(cursor, band.from);
+      if (from <= band.to) {
+        burned.push({ bandId: band.bandId, from, to: band.to });
+      }
+      cursor = band.to + 1; // queued bands are fully unconsumed
+    }
+    store.save(EMPTY_CHECKPOINT); // write-ahead: the burn is durable before anything else
+    for (const band of burned) {
+      appendOrThrow(
+        {
+          kind: 'burned',
+          at: now.toISOString(),
+          bandId: band.bandId,
+          from: band.from,
+          to: band.to,
+          count: band.to - band.from + 1,
+          reason: 'YEAR_ROLLOVER',
+        },
+        `burning ${band.to - band.from + 1} stale-${checkpoint.year} sequence(s) on ${band.bandId}`,
+      );
+    }
+    return EMPTY_CHECKPOINT;
+  };
 
   const reserve = (count: number): number[] => {
     if (!Number.isInteger(count) || count < 1) {
@@ -286,38 +374,14 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
         { count, maxReservation: config.maxReservation },
       );
     }
-    const now = assertEtimsClock(clock);
-    const year = now.getUTCFullYear(); // UTC — same year basis as the domain formatter
-    if (year < 1000 || year > 9999) {
-      throw new DomainError(ETIMS_ERRORS.CLOCK_INVALID, `clock year must be a 4-digit year, got ${year}`, { year });
-    }
-
+    const { now, year } = assertClockYear();
     let checkpoint = loadCheckpoint();
 
-    // Year rollover: burn any remaining stale-year stock before refusing —
-    // the burned sequences can never leak into a new-year number.
-    if (checkpoint.bandId !== '' && checkpoint.year !== year && checkpoint.next < checkpoint.bandEnd) {
-      const burnedFrom = checkpoint.next;
-      const burnedTo = checkpoint.bandEnd - 1;
-      const burnedCount = burnedTo - burnedFrom + 1;
-      const burned: SequenceCheckpoint = { ...checkpoint, next: checkpoint.bandEnd };
-      store.save(burned); // write-ahead: the burn is durable before anything else happens
-      checkpoint = burned;
-      appendOrThrow(
-        {
-          kind: 'burned',
-          at: now.toISOString(),
-          bandId: checkpoint.bandId,
-          from: burnedFrom,
-          to: burnedTo,
-          count: burnedCount,
-          reason: 'YEAR_ROLLOVER',
-        },
-        `burning ${burnedCount} stale-${checkpoint.year} sequence(s)`,
-      );
+    if (checkpoint.year !== 0 && checkpoint.year !== year && stockOf(checkpoint) > 0) {
+      checkpoint = burnStaleYear(checkpoint, now, year);
     }
 
-    if (checkpoint.bandId === '' || checkpoint.year !== year) {
+    if (checkpoint.bands.length === 0 || checkpoint.year !== year) {
       appendOrThrow(
         { kind: 'refill-queued', at: now.toISOString(), requestedCount: count, reason: 'YEAR_ROLLOVER' },
         'no active band for the clock year',
@@ -338,41 +402,52 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
       );
       throw new DomainError(
         ETIMS_ERRORS.STOCK_EXHAUSTED,
-        `band ${checkpoint.bandId} has ${stock} sequence(s) left, ${count} requested — a refill intent is queued; retry after refill() succeeds`,
-        { stock, count, bandId: checkpoint.bandId },
+        `band stack has ${stock} sequence(s) left, ${count} requested — a refill intent is queued; retry after refill() succeeds`,
+        { stock, count },
       );
     }
 
+    const activeBand = checkpoint.bands[0]!;
     const from = checkpoint.next;
     const to = from + (count - 1);
-    const consumed: SequenceCheckpoint = { ...checkpoint, next: to + 1 };
+    const newNext = to + 1;
+    const remaining = checkpoint.bands.filter((band) => band.to >= newNext);
+    const consumed: SequenceCheckpoint =
+      remaining.length === 0 ? EMPTY_CHECKPOINT : { year: checkpoint.year, next: newNext, bands: remaining };
     store.save(consumed); // write-ahead: persist BEFORE handing numbers out
     appendOrThrow(
-      { kind: 'reserved', at: now.toISOString(), bandId: checkpoint.bandId, from, to, count },
+      { kind: 'reserved', at: now.toISOString(), bandId: activeBand.bandId, from, to, count },
       `reserving [${from}, ${to}]`,
     );
     return Array.from({ length: count }, (_, i) => from + i);
   };
 
   const refill = async (): Promise<RefillOutcome> => {
-    const now = assertEtimsClock(clock);
-    const year = now.getUTCFullYear();
-    if (year < 1000 || year > 9999) {
-      throw new DomainError(ETIMS_ERRORS.CLOCK_INVALID, `clock year must be a 4-digit year, got ${year}`, { year });
-    }
-    const checkpoint = loadCheckpoint();
-    const stock = stockOf(checkpoint);
+    const { now, year } = assertClockYear();
+    let checkpoint = loadCheckpoint();
 
-    if (checkpoint.bandId !== '' && checkpoint.year === year && stock >= config.lowWatermark) {
+    // A wiring may call refill() straight through a year boundary — burn the
+    // stale stock here too, so no band is ever dropped without evidence.
+    if (checkpoint.year !== 0 && checkpoint.year !== year && stockOf(checkpoint) > 0) {
+      checkpoint = burnStaleYear(checkpoint, now, year);
+    }
+
+    const stock = stockOf(checkpoint);
+    const yearAligned = checkpoint.year === year && checkpoint.bands.length > 0;
+    if (yearAligned && stock >= config.lowWatermark) {
       return { ok: true, outcome: 'already-stocked' };
     }
 
-    const sameYearBandActive = checkpoint.bandId !== '' && checkpoint.year === year;
-    const expectedFrom = sameYearBandActive ? checkpoint.bandEnd + 1 : 1;
+    const lastBand = checkpoint.bands.length > 0 ? checkpoint.bands[checkpoint.bands.length - 1]! : null;
+    const expectedFrom = yearAligned && lastBand !== null ? lastBand.to + 1 : 1;
     const requestId = mintRequestId();
-    const request = { year, count: config.bandSize, afterSeq: expectedFrom - 1, requestId };
+    const result: VsdcBandResult = await client.registerSequenceBand({
+      year,
+      count: config.bandSize,
+      afterSeq: expectedFrom - 1,
+      requestId,
+    });
 
-    const result: VsdcBandResult = await client.registerSequenceBand(request);
     if (!result.ok) {
       appendOrThrow(
         {
@@ -385,18 +460,24 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
         },
         `band registration refused (${result.code})`,
       );
-      return { ok: false, outcome: 'refused', code: result.code, retryable: result.retryable, resultCd: result.resultCd };
+      return {
+        ok: false,
+        outcome: 'refused',
+        code: result.code,
+        retryable: result.retryable,
+        resultCd: result.resultCd,
+      };
     }
 
     const grant = result.grant;
 
-    // Idempotent replay: KRA re-answered with the band we already hold.
-    if (sameYearBandActive && grant.grantId === checkpoint.bandId) {
+    // Idempotent replay: KRA re-answered with a band we already hold.
+    if (yearAligned && checkpoint.bands.some((band) => band.bandId === grant.grantId)) {
       return { ok: true, outcome: 'already-active', bandId: grant.grantId, from: grant.from, to: grant.to };
     }
 
-    // Gapless contiguity: the only gap-avoidance that cannot be patched after
-    // the fact is refusing to ever activate a non-contiguous band.
+    // Gapless contiguity: refusing a non-contiguous grant is the only
+    // gap-avoidance that cannot be patched after the fact.
     if (grant.from !== expectedFrom) {
       appendOrThrow(
         {
@@ -418,7 +499,11 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
       };
     }
 
-    const activated: SequenceCheckpoint = { bandId: grant.grantId, year, next: grant.from, bandEnd: grant.to + 1 };
+    const newBand: SequenceBand = { bandId: grant.grantId, from: grant.from, to: grant.to };
+    const activated: SequenceCheckpoint =
+      yearAligned && lastBand !== null
+        ? { year, next: checkpoint.next, bands: [...checkpoint.bands, newBand] }
+        : { year, next: grant.from, bands: [newBand] };
     store.save(activated); // write-ahead: the band exists locally before anyone can draw from it
     appendOrThrow(
       {
@@ -436,15 +521,14 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
   };
 
   const stats = (): SourceStats => {
-    const now = assertEtimsClock(clock);
-    const clockYear = now.getUTCFullYear();
+    const { now, year } = assertClockYear();
     const checkpoint = loadCheckpoint();
     const stock = stockOf(checkpoint);
-    const yearAligned = checkpoint.bandId !== '' && checkpoint.year === clockYear;
+    const yearAligned = checkpoint.year === year && checkpoint.bands.length > 0;
     return {
-      bandId: checkpoint.bandId,
+      bandId: checkpoint.bands.length > 0 ? checkpoint.bands[0]!.bandId : '',
       year: checkpoint.year,
-      clockYear,
+      clockYear: year,
       stockRemaining: stock,
       lowWatermark: config.lowWatermark,
       needsRefill: !yearAligned || stock < config.lowWatermark,
