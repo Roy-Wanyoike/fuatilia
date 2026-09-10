@@ -1,0 +1,2 @@
+# Playwright failure artifacts (traces, screenshots, test-results).
+.artifacts/
