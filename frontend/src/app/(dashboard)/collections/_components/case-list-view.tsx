@@ -207,7 +207,7 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
                   </TBody>
                 </Table>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-ink-faint" data-testid="case-list-total">
+                  <p className="text-xs text-ink-soft" data-testid="case-list-total">
                     {flattened.total !== null
                       ? `${flattened.rows.length} of ${flattened.total} case(s) shown`
                       : `${flattened.rows.length} case(s) shown`}
