@@ -16,11 +16,12 @@ import {
 } from '@/lib/collections/case-ops';
 import { formatTimestamp, scheduledForToIso } from '@/lib/collections/display';
 import {
-  ACTION_TYPE_LABELS,
   caseActionLadder,
   defaultSourceFor,
   requiresDunningConsent,
 } from '@/lib/collections/state-machine';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import { CASE_ACTION_TYPE_LABEL_KEYS } from './case-labels';
 
 /**
  * The RECORD-ACTION flow (issue #135) — POST /v1/collections/cases/{caseId}/
@@ -39,6 +40,8 @@ import {
  *    was sent"), which surfaces verbatim.
  *
  * No optimistic append: the log grows only when the server's answer lands.
+ * Strings resolve through the shared i18n catalogs (issue #180); the source
+ * enum stays a wire value (operator diagnostics).
  */
 
 export interface CaseRecordActionPanelProps {
@@ -56,6 +59,7 @@ export function CaseRecordActionPanel({
   writeClient = defaultCollectionsClient,
   onCaseReplaced,
 }: CaseRecordActionPanelProps) {
+  const t = usePortalT();
   const ladder = caseActionLadder(caseView);
   const [type, setType] = useState<CaseActionType>('call');
   const [scheduledFor, setScheduledFor] = useState('');
@@ -78,16 +82,15 @@ export function CaseRecordActionPanel({
       <Card aria-labelledby="case-record-action-heading" data-testid="case-record-action-panel">
         <CardHeader>
           <CardTitle id="case-record-action-heading" className="text-base">
-            Record an action
+            {t('dashboard.collections.record.title')}
           </CardTitle>
           <CardDescription>
-            POST …/actions — append to the case&apos;s action log.
+            {t('dashboard.collections.record.sealedDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-ink-soft" data-testid="case-record-action-sealed">
-            This case is {caseView.status} — its action log is sealed (the wire refuses further
-            writes with 409 CASE_CLOSED).
+            {t('dashboard.collections.record.sealedNote', { status: caseView.status })}
           </p>
         </CardContent>
       </Card>
@@ -105,13 +108,11 @@ export function CaseRecordActionPanel({
   async function submit(): Promise<void> {
     const iso = scheduledForToIso(scheduledFor);
     if (iso === null) {
-      setLocalError('Enter a valid schedule date and time.');
+      setLocalError(t('dashboard.collections.record.scheduleRequired'));
       return;
     }
     if (consentRequired && consentRef.trim().length === 0) {
-      setLocalError(
-        'An automated outbound send requires a dunning consent reference (K2) — nothing may be sent without one.',
-      );
+      setLocalError(t('dashboard.collections.record.consentRequired'));
       return;
     }
     setLocalError(null);
@@ -128,9 +129,11 @@ export function CaseRecordActionPanel({
       // The server's appended action is the truth; format its schedule
       // BEFORE the local field resets (the message outlives the input).
       const appended = result.data.action;
-      const label = ACTION_TYPE_LABELS[appended?.type ?? type];
+      const label = t(CASE_ACTION_TYPE_LABEL_KEYS[appended?.type ?? type]);
       const when = formatTimestamp(appended?.scheduledFor ?? iso);
-      setRecordedMessage(`${label} recorded — scheduled for ${when}.`);
+      setRecordedMessage(
+        t('dashboard.collections.record.success', { type: label, when }),
+      );
       setPhase('recorded');
       setScheduledFor('');
       setConsentRef('');
@@ -150,10 +153,10 @@ export function CaseRecordActionPanel({
     <Card aria-labelledby="case-record-action-heading" data-testid="case-record-action-panel">
       <CardHeader>
         <CardTitle id="case-record-action-heading" className="text-base">
-          Record an action
+          {t('dashboard.collections.record.title')}
         </CardTitle>
         <CardDescription>
-          POST …/actions — one entry per send/attempt, appended to the sealed log.
+          {t('dashboard.collections.record.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -169,7 +172,7 @@ export function CaseRecordActionPanel({
 
         {phase === 'refused' && refusalState !== null && (
           <ErrorState
-            title="Couldn't record the action"
+            title={t('dashboard.collections.record.refusedTitle')}
             message={refusalState.message}
             code={refusalState.code}
             requestId={refusalState.requestId}
@@ -179,7 +182,7 @@ export function CaseRecordActionPanel({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
             <label htmlFor="case-action-type" className="text-sm font-medium text-ink">
-              Type
+              {t('dashboard.collections.record.typeLabel')}
             </label>
             <select
               id="case-action-type"
@@ -190,14 +193,14 @@ export function CaseRecordActionPanel({
             >
               {ladder.recordableTypes.map((candidate) => (
                 <option key={candidate} value={candidate}>
-                  {ACTION_TYPE_LABELS[candidate]}
+                  {t(CASE_ACTION_TYPE_LABEL_KEYS[candidate])}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label htmlFor="case-action-scheduled" className="text-sm font-medium text-ink">
-              Scheduled for (Nairobi time) <span aria-hidden="true">*</span>
+              {t('dashboard.collections.record.scheduledLabel')} <span aria-hidden="true">*</span>
             </label>
             <input
               id="case-action-scheduled"
@@ -211,7 +214,7 @@ export function CaseRecordActionPanel({
           </div>
           <div>
             <label htmlFor="case-action-source" className="text-sm font-medium text-ink">
-              Source
+              {t('dashboard.collections.record.sourceLabel')}
             </label>
             <select
               id="case-action-source"
@@ -232,7 +235,7 @@ export function CaseRecordActionPanel({
         {consentRequired && (
           <div>
             <label htmlFor="case-action-consent" className="text-sm font-medium text-ink">
-              Dunning consent reference (K2) <span aria-hidden="true">*</span>
+              {t('dashboard.collections.record.consentLabel')} <span aria-hidden="true">*</span>
             </label>
             <input
               id="case-action-consent"
@@ -241,19 +244,18 @@ export function CaseRecordActionPanel({
               onChange={(event) => setConsentRef(event.target.value)}
               required
               disabled={phase === 'submitting'}
-              placeholder="Active consent reference for automated outbound dunning"
+              placeholder={t('dashboard.collections.record.consentPlaceholder')}
               className="mt-1 w-full rounded-md border border-slate-300 bg-surface-raised px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
             <p className="mt-1 text-xs text-ink-soft">
-              Automated sms/whatsapp dunning requires an active consent reference — without one
-              the wire refuses 403 DUNNING_CONSENT_REQUIRED and nothing is sent.
+              {t('dashboard.collections.record.consentHelp')}
             </p>
           </div>
         )}
 
         <div>
           <label htmlFor="case-action-outcome" className="text-sm font-medium text-ink">
-            Outcome (optional — usually stamped when completing)
+            {t('dashboard.collections.record.outcomeLabel')}
           </label>
           <textarea
             id="case-action-outcome"
@@ -272,7 +274,9 @@ export function CaseRecordActionPanel({
         )}
 
         <Button onClick={() => void submit()} disabled={phase === 'submitting'}>
-          {phase === 'submitting' ? 'Recording…' : 'Record action'}
+          {phase === 'submitting'
+            ? t('dashboard.collections.record.submitting')
+            : t('dashboard.collections.record.submit')}
         </Button>
       </CardContent>
     </Card>

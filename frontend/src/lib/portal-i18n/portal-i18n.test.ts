@@ -161,6 +161,23 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
       'Escalate to urgent',
     );
     expect(translate(en, 'dashboard.collections.summary.overdueSuffix')).toBe('· overdue');
+    expect(translate(en, 'dashboard.collections.record.title')).toBe('Record an action');
+    expect(
+      translate(en, 'dashboard.collections.record.success', {
+        type: 'Call',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Call recorded — scheduled for 2026-09-02 12:00.');
+    expect(translate(en, 'dashboard.collections.record.scheduledLabel')).toBe(
+      'Scheduled for (Nairobi time)',
+    );
+    expect(translate(en, 'dashboard.collections.complete.title')).toBe('Complete an action');
+    expect(
+      translate(en, 'dashboard.collections.complete.optionLabel', {
+        type: 'Call',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Call — scheduled 2026-09-02 12:00');
     expect(translate(en, 'dashboard.customers.directory.derivedCount', { count: 1 })).toBe(
       '· 1 derived',
     );
@@ -200,6 +217,13 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
     expect(translate(sw, 'dashboard.payments.title')).toBe('Malipo');
     expect(translate(sw, 'dashboard.collections.statusLabels.in_progress')).toBe('Inaendelea');
     expect(translate(sw, 'dashboard.collections.open.toggle')).toBe('Fungua kesa…');
+    expect(translate(sw, 'dashboard.collections.record.submit')).toBe('Rekodi hatua');
+    expect(
+      translate(sw, 'dashboard.collections.complete.optionLabel', {
+        type: 'Simu',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Simu — imepangwa 2026-09-02 12:00');
     expect(translate(sw, 'dashboard.customers.directory.title')).toBe('Wateja');
     expect(translate(sw, 'auth.signIn.title')).toBe('Ingia kwenye Fuatilia');
     expect(translate(sw, 'auth.signOut.submit')).toBe('Toka');
