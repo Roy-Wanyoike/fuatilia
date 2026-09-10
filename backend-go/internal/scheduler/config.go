@@ -76,6 +76,14 @@ func ResolveConfig(cfg Config) (Config, error) {
 	if cfg.LateFee.Kind == "" {
 		cfg.LateFee.Kind = DefaultLateFeeKind
 	}
+	// The shipped percent policy carries its default rate (150 bps); a flat
+	// policy has no safe default amount — an explicit one is required
+	// (FUATILIA_SCHED_LATEFEE_FLAT_MINOR) and ValidateLateFeePolicy refuses
+	// its absence with LATE_FEE_POLICY_FLAT_REQUIRED.
+	if cfg.LateFee.Kind == LateFeePercent && cfg.LateFee.PercentBps == nil {
+		bps := DefaultLateFeePercentBp
+		cfg.LateFee.PercentBps = &bps
+	}
 	if _, err := ValidateLateFeePolicy(cfg.LateFee); err != nil {
 		return cfg, err
 	}
@@ -135,6 +143,8 @@ func configFromEnv(getenv func(string) string) (Config, error) {
 		return cfg, err
 	} else if getenv("FUATILIA_SCHED_LATEFEE_GRACE_DAYS") != "" {
 		cfg.LateFee.GraceDays = v
+	} else {
+		cfg.LateFee.GraceDays = DefaultLateFeeGraceDays
 	}
 	return ResolveConfig(cfg)
 }

@@ -148,6 +148,9 @@ func New(jobs []Job, locker Locker, log *slog.Logger) (*Scheduler, error) {
 	if locker == nil {
 		return nil, schedErr(CodeConfigInvalid, "locker is required")
 	}
+	if len(jobs) == 0 {
+		return nil, schedErr(CodeJobInvalid, "a scheduler needs at least one job")
+	}
 	if log == nil {
 		log = slog.Default()
 	}
