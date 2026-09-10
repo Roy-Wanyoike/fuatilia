@@ -86,6 +86,124 @@ describe('missing-key refusal (tsc level — the documented pattern)', () => {
     expect(typeof translate(en, 'common.returnToGate')).toBe('string');
     expect(typeof translate(en, 'language.kiswahili')).toBe('string');
   });
+
+  it('key derivation reaches every #180 leaf — dashboard + auth samples resolve', () => {
+    // (dashboard) — one sample per section, proving the union grew with the
+    // catalog and every new view is addressable at tsc level.
+    expect(typeof translate(en, 'dashboard.overview.title')).toBe('string');
+    expect(typeof translate(en, 'dashboard.payments.col.receipt')).toBe('string');
+    expect(typeof translate(en, 'dashboard.collections.statusLabels.in_progress')).toBe('string');
+    expect(typeof translate(en, 'dashboard.collections.open.toggle')).toBe('string');
+    expect(
+      typeof translate(en, 'dashboard.collections.log.sealedNote', { status: 'Resolved' }),
+    ).toBe('string');
+    expect(typeof translate(en, 'dashboard.customers.directory.col.lastActivity')).toBe('string');
+    expect(typeof translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('string');
+    expect(typeof translate(en, 'dashboard.reconciliation.capabilities')).toBe('string');
+    expect(typeof translate(en, 'dashboard.settings.scope')).toBe('string');
+    // (auth) — the credential surfaces.
+    expect(typeof translate(en, 'auth.meta.title')).toBe('string');
+    expect(typeof translate(en, 'auth.signIn.credentialLabel')).toBe('string');
+    expect(typeof translate(en, 'auth.signOut.submit')).toBe('string');
+  });
+
+  it('a key absent from the #180 sections is a TYPE error too — the pattern extends', () => {
+    // Same load-bearing contract as above, now pinning the dashboard/auth
+    // sections: if key derivation ever stops rejecting unknown keys there,
+    // `npm run typecheck` fails on these lines.
+    expect(() =>
+      // @ts-expect-error — unknown dashboard keys must be a tsc error too
+      translate(en, 'dashboard.collections.doesNotExist' as string),
+    ).toThrow(MissingPortalStringError);
+
+    expect(() =>
+      // @ts-expect-error — a typo'd auth key must be a tsc error too
+      translate(en, 'auth.singIn.title' as string),
+    ).toThrow(MissingPortalStringError);
+
+    expect(() =>
+      // @ts-expect-error — a retired #180 key must be refused like a portal one
+      translate(en, 'dashboard.overview.cardTitle' as string),
+    ).toThrow(MissingPortalStringError);
+  });
+});
+
+describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () => {
+  // The (dashboard)/(auth) components previously rendered these literals
+  // inline; existing component tests pin them. Adoption moved the strings
+  // into the catalog — this suite makes the byte-identity load-bearing at
+  // the catalog level too, so a casual copy edit shows up here first.
+  it('dashboard strings that component tests pin resolve byte-identically', () => {
+    expect(translate(en, 'dashboard.overview.title')).toBe('Overview');
+    expect(translate(en, 'dashboard.overview.emptyTitle')).toBe('Nothing here yet');
+    expect(translate(en, 'dashboard.payments.refusedTitle')).toBe('Payments are unavailable');
+    expect(translate(en, 'dashboard.payments.pageOf', { page: 1, pages: 3 })).toBe(
+      'page 1 of ≤ 3',
+    );
+    expect(translate(en, 'dashboard.collections.list.emptyTitle')).toBe(
+      'No collections cases yet',
+    );
+    expect(translate(en, 'dashboard.collections.list.shownOfTotal', { shown: 3, total: 3 })).toBe(
+      '3 of 3 case(s) shown',
+    );
+    expect(translate(en, 'dashboard.collections.statusLabels.in_progress')).toBe('In progress');
+    expect(translate(en, 'dashboard.collections.actionTypeLabels.call')).toBe('Call');
+    expect(translate(en, 'dashboard.collections.open.success', { caseNumber: 'CASE-000007' })).toBe(
+      'Case CASE-000007 opened.',
+    );
+    expect(translate(en, 'dashboard.collections.detail.heading', { caseNumber: 'CASE-000007' })).toBe(
+      'Case CASE-000007',
+    );
+    expect(translate(en, 'dashboard.collections.transition.submit', { to: 'In progress' })).toBe(
+      'Move to In progress',
+    );
+    expect(translate(en, 'dashboard.collections.escalation.submit', { to: 'urgent' })).toBe(
+      'Escalate to urgent',
+    );
+    expect(translate(en, 'dashboard.collections.summary.overdueSuffix')).toBe('· overdue');
+    expect(translate(en, 'dashboard.customers.directory.derivedCount', { count: 1 })).toBe(
+      '· 1 derived',
+    );
+    expect(translate(en, 'dashboard.customers.directory.overdueCount', { count: 1 })).toBe(
+      '1 overdue',
+    );
+    expect(translate(en, 'dashboard.customers.c360.overdueBadge')).toBe('overdue');
+    expect(translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('due now');
+  });
+
+  it('auth strings that component tests pin resolve byte-identically', () => {
+    expect(translate(en, 'auth.meta.title')).toBe('Fuatilia — Sign in');
+    expect(translate(en, 'auth.signIn.title')).toBe('Sign in to Fuatilia');
+    expect(translate(en, 'auth.signIn.credentialLabel')).toBe('Session credential');
+    expect(translate(en, 'auth.signIn.submit')).toBe('Open the console');
+    expect(translate(en, 'auth.signIn.submitting')).toBe('Validating…');
+    expect(translate(en, 'auth.signIn.emptyCredentialError')).toBe(
+      'Paste the session credential your administrator issued.',
+    );
+    expect(translate(en, 'auth.signIn.refusedTitle')).toBe(
+      'This session credential was not accepted',
+    );
+    expect(translate(en, 'auth.signIn.unreachableTitle')).toBe('The API could not be reached');
+    expect(translate(en, 'auth.signOut.submit')).toBe('Sign out');
+    expect(translate(en, 'auth.signOut.signInAgain')).toBe('Sign in again');
+  });
+
+  it('the shared refusal-envelope labels match the (auth) AccessRefused rendering', () => {
+    // (auth)/access-refused.tsx adopts the #149 shared `common` labels —
+    // they render byte-identically ('code:' / 'requestId:').
+    expect(translate(en, 'common.codeLabel')).toBe('code:');
+    expect(translate(en, 'common.requestIdLabel')).toBe('requestId:');
+  });
+
+  it('sw carries every #180 string too — sample translations resolve', () => {
+    expect(translate(sw, 'dashboard.overview.title')).toBe('Muhtasari');
+    expect(translate(sw, 'dashboard.payments.title')).toBe('Malipo');
+    expect(translate(sw, 'dashboard.collections.statusLabels.in_progress')).toBe('Inaendelea');
+    expect(translate(sw, 'dashboard.collections.open.toggle')).toBe('Fungua kesa…');
+    expect(translate(sw, 'dashboard.customers.directory.title')).toBe('Wateja');
+    expect(translate(sw, 'auth.signIn.title')).toBe('Ingia kwenye Fuatilia');
+    expect(translate(sw, 'auth.signOut.submit')).toBe('Toka');
+  });
 });
 
 describe('interpolation', () => {
