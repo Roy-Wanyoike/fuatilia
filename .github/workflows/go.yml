@@ -1,12 +1,36 @@
 # Go backend CI — gates mirror the local merge gate (docs/ENGINEERING_STATUS.md).
+#
+# Env-var contract — the EXACT names the code reads (do not rename):
+#   - FUATILIA_TEST_DATABASE_URL — read by
+#       backend-go/internal/outbox/testmain_test.go:33 (outbox tests seed and
+#       truncate this database directly, so migrations are applied to it by a
+#       dedicated step below) and by
+#       backend-go/internal/transport/integration_test.go:55 (the /v1 kernel
+#       suite prefers it over pgtest's own DSN).
+#   - FUATILIA_TEST_PGBIN — read by backend-go/internal/infra/pgtest/pgtest.go:44
+#     (EnvPGBin) / :386 (PGBin()): RequireShared hard-checks that pg_ctl and
+#     postgres exist under this directory and StartTemp shells out to
+#     initdb/pg_ctl for the restart-resilience suites (internal/infra,
+#     internal/webhooks). pgtest has NO skip switch — missing binaries or an
+#     unreachable cluster FAIL the run. Ubuntu's postgresql-16 package
+#     provides the binaries at /usr/lib/postgresql/16/bin.
+#   - FUATILIA_PG_BIN_DIR — the TypeScript spelling of the same contract
+#     (src/adapters/persistence/pg/testutil.ts:222, PG_BIN_DIR_ENV). Not read
+#     by Go; exported here so both PG-wired workflows carry the identical
+#     three-variable contract (see docs/ops/CI-BILLING-BLOCKER.md).
 name: go
 
 on:
   push:
     branches: [main]
-    paths: ["backend-go/**", ".github/workflows/go.yml"]
+    paths: ["backend-go/**", "db/migrations/**", ".github/workflows/go.yml"]
   pull_request:
-    paths: ["backend-go/**", ".github/workflows/go.yml"]
+    paths: ["backend-go/**", "db/migrations/**", ".github/workflows/go.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:
@@ -14,16 +38,58 @@ defaults:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: go (gofmt, vet, test -race, govulncheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: fuatilia_pgadapters_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fuatilia_pgadapters_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FUATILIA_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5435/fuatilia_pgadapters_test
+      FUATILIA_TEST_PGBIN: /usr/lib/postgresql/16/bin
+      FUATILIA_PG_BIN_DIR: /usr/lib/postgresql/16/bin
     steps:
+      # actions/checkout v7 + setup-go v7 are real published majors
+      # (v7.0.1 / v7.0.0 are current releases of those actions).
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.26" # matches backend-go/go.mod (`go 1.26.0`)
       - name: gofmt (must be empty)
         run: test -z "$(gofmt -l .)"
       - name: go vet
         run: go vet ./...
+      - name: Install PostgreSQL 16 (pgtest requires real initdb/pg_ctl/postgres)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-16
+      - name: Verify the PG binaries pgtest hard-requires
+        run: |
+          test -x /usr/lib/postgresql/16/bin/initdb
+          test -x /usr/lib/postgresql/16/bin/pg_ctl
+          test -x /usr/lib/postgresql/16/bin/postgres
+      # The outbox suite truncates/seeds FUATILIA_TEST_DATABASE_URL directly
+      # (outbox/testmain_test.go) without applying migrations itself, so the
+      # service database must carry the 0001–0014 schema first. db/migrate.cjs
+      # is stdlib-only (db/pgclient.cjs speaks the wire protocol) — no npm
+      # install needed; it is idempotent (schema_migrations ledger).
+      - name: Apply db/migrations to the service DB (outbox suite seeds it directly)
+        working-directory: ${{ github.workspace }}
+        run: |
+          node --version
+          PGHOST=127.0.0.1 PGPORT=5435 PGUSER=postgres PGDATABASE=fuatilia_pgadapters_test \
+            node db/migrate.cjs
       - name: go test (race)
         run: go test ./... -race -count=1
       - name: govulncheck (known vulnerabilities in stdlib + modules)

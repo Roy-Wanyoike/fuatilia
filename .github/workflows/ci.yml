@@ -1,9 +1,31 @@
+# CI — TypeScript domain core/adapters (root package) + frontend package.
+#
+# The env-var contract below is set by the CODE, not by convention. The exact
+# names and values the harness reads:
+#   - FUATILIA_TEST_DATABASE_URL — src/adapters/persistence/pg/testutil.ts:34
+#     (TEST_DATABASE_URL_ENV; default `postgres://postgres@127.0.0.1:5435/
+#     fuatilia_pgadapters_test`, testutil.ts:37). The 24 PG-backed specs
+#     hard-fail on an unreachable cluster — they never skip silently.
+#   - FUATILIA_PG_BIN_DIR — src/adapters/persistence/pg/testutil.ts:222
+#     (PG_BIN_DIR_ENV): the ephemeral-cluster (down/up/crash) specs shell out
+#     to initdb/pg_ctl from this directory; missing binaries are a HARD failure.
+#   - FUATILIA_TEST_PGBIN — the Go-side spelling of the same contract
+#     (backend-go/internal/infra/pgtest/pgtest.go:44, EnvPGBin). Not read by
+#     the TypeScript suite; exported here so the PG-16 service contract is
+#     identical across ci.yml and go.yml (see docs/ops/CI-BILLING-BLOCKER.md).
+# PostgreSQL 16 binaries come from Ubuntu's postgresql-16 package, installed
+# at /usr/lib/postgresql/16/bin by the step below.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Root package: TypeScript domain core + adapters, including the 24
@@ -12,7 +34,9 @@ jobs:
   # real initdb/pg_ctl binaries (installed below). If PG is missing the run
   # FAILS — a green suite against a database that was not there would be a lie.
   domain:
-    runs-on: ubuntu-latest
+    name: domain (node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -33,9 +57,12 @@ jobs:
           --health-retries 12
     env:
       FUATILIA_TEST_DATABASE_URL: postgres://postgres@127.0.0.1:5435/fuatilia_pgadapters_test
+      FUATILIA_TEST_PGBIN: /usr/lib/postgresql/16/bin
       FUATILIA_PG_BIN_DIR: /usr/lib/postgresql/16/bin
     steps:
+      # actions/checkout v7 is a real published major (v7.0.1 is current).
       - uses: actions/checkout@v7
+      # actions/setup-node v7 is a real published major (v7.0.0 is current).
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
@@ -43,6 +70,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql-16
+      - name: Verify the PG binaries the specs hard-require
+        run: |
+          test -x /usr/lib/postgresql/16/bin/initdb
+          test -x /usr/lib/postgresql/16/bin/pg_ctl
       - name: Install, typecheck, test (full suite incl. PG-backed specs)
         shell: bash
         run: |
@@ -53,8 +84,12 @@ jobs:
           npm test
 
   # Frontend package (Next.js): separate manifest, so it gets its own job.
+  # Its vitest suites are pure (no PostgreSQL); typecheck + vitest run are
+  # the exact scripts frontend/package.json defines.
   frontend:
-    runs-on: ubuntu-latest
+    name: frontend (typecheck + vitest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -70,5 +105,5 @@ jobs:
         run: |
           set -e
           npm ci --no-audit --no-fund
-          npm run typecheck --if-present
-          npm test --if-present
+          npm run typecheck
+          npm test
