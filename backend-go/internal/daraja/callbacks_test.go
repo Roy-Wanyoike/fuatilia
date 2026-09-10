@@ -93,6 +93,7 @@ func wantCode(t *testing.T, payload map[string]any, opts ParseOptions, code stri
 }
 
 func TestParseC2BHappyPaths(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []CallbackKind{KindC2BValidation, KindC2BConfirm} {
 		parsed := mustParse(t, c2bPayload(), ParseOptions{C2BKind: kind})
 		c2b, ok := parsed.(ParsedC2bCallback)
@@ -115,6 +116,7 @@ func TestParseC2BHappyPaths(t *testing.T) {
 }
 
 func TestParseC2BRefSplitting(t *testing.T) {
+	t.Parallel()
 	p := c2bPayload()
 	p["BillRefNumber"] = "INV-1 / INV-2,INV-3"
 	c2b := mustParse(t, p, ParseOptions{C2BKind: KindC2BConfirm}).(ParsedC2bCallback)
@@ -124,6 +126,7 @@ func TestParseC2BRefSplitting(t *testing.T) {
 }
 
 func TestParseC2BMalformedCorpus(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		mutate func(map[string]any)
@@ -170,6 +173,7 @@ func TestParseC2BMalformedCorpus(t *testing.T) {
 }
 
 func TestParseSTKSuccess(t *testing.T) {
+	t.Parallel()
 	parsed := mustParse(t, stkSuccessPayload(), ParseOptions{}).(ParsedSTKCallback)
 	if !parsed.Success || parsed.ResultCode != 0 {
 		t.Fatalf("success state wrong: %+v", parsed)
@@ -195,6 +199,7 @@ func TestParseSTKSuccess(t *testing.T) {
 }
 
 func TestParseSTKFailureFamilies(t *testing.T) {
+	t.Parallel()
 	requested := map[string]int64{"ws_CO_12092025151022104": 250_000, "ws_CO_12092025152140505": 250_000}
 	cases := []struct {
 		code       float64
@@ -229,6 +234,7 @@ func TestParseSTKFailureFamilies(t *testing.T) {
 }
 
 func TestParseSTKMalformedCorpus(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		mutate func(map[string]any)
@@ -301,6 +307,7 @@ func TestParseSTKMalformedCorpus(t *testing.T) {
 }
 
 func TestParseB2C(t *testing.T) {
+	t.Parallel()
 	t.Run("success with evidence amount", func(t *testing.T) {
 		parsed := mustParse(t, b2cSuccessPayload(), ParseOptions{}).(ParsedB2CResult)
 		if !parsed.Success || parsed.ResultCode != 0 {
@@ -352,6 +359,7 @@ func TestParseB2C(t *testing.T) {
 }
 
 func TestMoneyBoundary(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		raw     string
 		want    int64

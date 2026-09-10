@@ -45,6 +45,7 @@ func oauthScript(f *fakeServer, token string, expiresIn string) {
 }
 
 func TestOAuthTokenLifecycle(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok-1", "3600")
 	clock := newFakeClock(time.Date(2026, 9, 8, 10, 0, 0, 0, eatLocation))
@@ -79,6 +80,7 @@ func TestOAuthTokenLifecycle(t *testing.T) {
 }
 
 func TestOAuthFailures(t *testing.T) {
+	t.Parallel()
 	t.Run("bad credentials are AUTH_FAILED and not retried", func(t *testing.T) {
 		f := newFakeServer(t)
 		f.script("/oauth/v1/generate", scriptedResponse{status: 400, body: map[string]string{"error": "bad_request"}})
@@ -105,6 +107,7 @@ func TestOAuthFailures(t *testing.T) {
 }
 
 func TestOAuthSingleFlight(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok-concurrent", "3600")
 	c := f.client(t, nil)
@@ -132,6 +135,7 @@ func TestOAuthSingleFlight(t *testing.T) {
 }
 
 func TestRetryPolicy(t *testing.T) {
+	t.Parallel()
 	pushPath := "/mpesa/stkpush/v1/processrequest"
 	pushOK := scriptedResponse{status: 200, body: map[string]string{
 		"ResponseCode": "0", "CheckoutRequestID": "ws_CO_abcdefgh", "MerchantRequestID": "m-2",
@@ -232,6 +236,7 @@ func (failingDoer) Do(*http.Request) (*http.Response, error) {
 }
 
 func TestContextDeadline(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	c := f.client(t, nil)
@@ -245,6 +250,7 @@ func TestContextDeadline(t *testing.T) {
 }
 
 func TestSTKRequestValidation(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		mutate   func(*STKInitiate)
@@ -278,6 +284,7 @@ func TestSTKRequestValidation(t *testing.T) {
 }
 
 func TestSTKInitiateWireShape(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	f.script("/mpesa/stkpush/v1/processrequest",
@@ -310,6 +317,7 @@ func TestSTKInitiateWireShape(t *testing.T) {
 }
 
 func TestSTKInFlightGuard(t *testing.T) {
+	t.Parallel()
 	f := newFakeServer(t)
 	oauthScript(f, "tok", "3600")
 	release := make(chan struct{})
@@ -369,6 +377,7 @@ func TestSTKInFlightGuard(t *testing.T) {
 }
 
 func TestQuerySTKAndOtherEndpoints(t *testing.T) {
+	t.Parallel()
 	t.Run("query STK", func(t *testing.T) {
 		f := newFakeServer(t)
 		oauthScript(f, "tok", "3600")
@@ -480,6 +489,7 @@ func TestQuerySTKAndOtherEndpoints(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
+	t.Parallel()
 	t.Run("missing credentials refused", func(t *testing.T) {
 		_, err := ConfigFromEnv(func(k string) string { return "" })
 		if err == nil {

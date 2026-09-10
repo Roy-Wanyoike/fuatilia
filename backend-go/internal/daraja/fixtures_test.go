@@ -318,6 +318,7 @@ func parseFixture(t *testing.T, payload string, opts ParseOptions) (ParsedCallba
 }
 
 func TestFixtureCorpusAcceptsValidPayloads(t *testing.T) {
+	t.Parallel()
 	valid := []struct {
 		id      string
 		payload string
@@ -345,6 +346,7 @@ func TestFixtureCorpusAcceptsValidPayloads(t *testing.T) {
 }
 
 func TestFixtureCorpusRefusesMalformedRows(t *testing.T) {
+	t.Parallel()
 	for _, row := range malformedFixtures {
 		t.Run(row.id, func(t *testing.T) {
 			_, err := parseFixture(t, row.payload, ParseOptions{C2BKind: KindC2BConfirm})
@@ -357,6 +359,7 @@ func TestFixtureCorpusRefusesMalformedRows(t *testing.T) {
 }
 
 func TestSTKFailureFixtureFamilies(t *testing.T) {
+	t.Parallel()
 	requested := map[string]int64{
 		"ws_CO_12092025144000202": 250_000,
 		"ws_CO_12092025145530103": 250_000,
@@ -391,6 +394,7 @@ func TestSTKFailureFixtureFamilies(t *testing.T) {
 }
 
 func TestFixtureSTKSuccessMetadata(t *testing.T) {
+	t.Parallel()
 	parsed, err := parseFixture(t, fixtureSTKSuccess, ParseOptions{})
 	if err != nil {
 		t.Fatalf("success fixture refused: %v", err)
@@ -408,6 +412,7 @@ func TestFixtureSTKSuccessMetadata(t *testing.T) {
 }
 
 func TestIntakeFunnelR9(t *testing.T) {
+	t.Parallel()
 	confirm := ParseOptions{C2BKind: KindC2BConfirm}
 
 	t.Run("first sight accepted, replay duplicate with one tripwire", func(t *testing.T) {
