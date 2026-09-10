@@ -99,8 +99,25 @@ FUATILIA_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5435/fuatilia_api_test 
   go test -race $(go list ./... | grep -v internal/outbox)
 ```
 
-CI (`.github/workflows/go.yml`) runs the same gates on every push/PR; it activates
-once the GitHub account billing lock is resolved — until then local green is the merge gate
+**pgtest binary discovery (issue #131):** the suites resolve the PostgreSQL 16
+binaries in this order — first hit wins:
+
+1. `FUATILIA_TEST_PGBIN` — the Go lanes' original override (kept for existing scripts);
+2. `FUATILIA_PG_BIN_DIR` — the name the TS persistence testutil
+   (`src/adapters/persistence/pg/testutil.ts`) and CI set;
+3. `PATH` — the directory holding both `initdb` and `pg_ctl` (a distro install such
+   as `/usr/lib/postgresql/16/bin` works once it is on `PATH`).
+
+There is no hardcoded install path: a total miss **fails** with an error naming every
+tried path and the env vars to set — the same honesty rule as the unreachable cluster.
+
+```sh
+export FUATILIA_PG_BIN_DIR=/usr/lib/postgresql/16/bin   # or FUATILIA_TEST_PGBIN=…, or put that dir on PATH
+```
+
+CI (`.github/workflows/go.yml`) runs the same gates on every push/PR, providing the
+PostgreSQL 16 binaries through `FUATILIA_PG_BIN_DIR`; it activates once the GitHub
+account billing lock is resolved — until then local green is the merge gate
 (see `docs/ENGINEERING_STATUS.md`).
 
 ## What this module deliberately does NOT contain yet
