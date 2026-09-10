@@ -1,0 +1,54 @@
+# GitHub auto-generated release-notes configuration.
+#
+# Applied by `gh release create vX.Y.Z --generate-notes` and by the
+# "Generate release notes" button on new GitHub Releases. Affects only notes
+# generated after this file lands; existing releases are untouched.
+#
+# PRs are bucketed by label, first matching category wins (a PR with multiple
+# labels appears in exactly one section). Unlabelled PRs land in "Other Changes"
+# so nothing is ever dropped from the notes.
+#
+# Labels used here that already exist in the repo: feature, enhancement, bug,
+# documentation, docs, dependencies, github_actions, devops, compliance,
+# duplicate, invalid, question, wontfix.
+#
+# Labels that must be created once (see docs/RELEASE.md §5.2):
+#   gh label create breaking --color D93F0B --description "Breaking API/schema/contract change"
+#   gh label create security --color B60205 --description "Security or credential-hygiene fix"
+changelog:
+  exclude:
+    # Noise labels: never appear in release notes.
+    labels:
+      - duplicate
+      - invalid
+      - question
+      - wontfix
+  categories:
+    - title: ⚠️ Breaking Changes
+      labels:
+        - breaking
+    - title: 🚀 Added
+      labels:
+        - feature
+        - enhancement
+    - title: 🐛 Fixed
+      labels:
+        - bug
+    - title: 🔐 Security & Compliance
+      labels:
+        - security
+        - compliance
+    - title: 📝 Documentation
+      labels:
+        - documentation
+        - docs
+    - title: 🏗️ Infrastructure & CI
+      labels:
+        - devops
+        - github_actions
+    - title: 📦 Dependencies
+      labels:
+        - dependencies
+    - title: Other Changes
+      labels:
+        - "*"
