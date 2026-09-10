@@ -3,23 +3,29 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import { LanguageToggle } from '@/lib/portal-i18n/language-toggle';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import type { LocaleKey } from '@/lib/portal-i18n/dictionary';
 
 /**
  * Portal shell for the authenticated payer (issue #86): landmark structure,
  * a compact mobile-first nav (Balance / Invoices / Statement) and sign-out.
  * The credential lives in the httpOnly cookie only — sign-out simply asks
- * the same-origin session route to expire it, server-side.
+ * the same-origin session route to expire it, server-side. All payer-facing
+ * strings resolve through the portal i18n catalogs (issue #149); the
+ * language toggle persists the choice to the locale cookie.
  */
 
-const PORTAL_NAV = [
-  { href: '/', label: 'Balance' },
-  { href: '/invoices', label: 'Invoices' },
-  { href: '/statement', label: 'Statement' },
-] as const;
+const PORTAL_NAV: ReadonlyArray<{ href: string; labelKey: LocaleKey }> = [
+  { href: '/', labelKey: 'shell.nav.balance' },
+  { href: '/invoices', labelKey: 'shell.nav.invoices' },
+  { href: '/statement', labelKey: 'shell.nav.statement' },
+];
 
 export function PortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = usePortalT();
   const [signingOut, setSigningOut] = useState(false);
 
   async function signOut(): Promise<void> {
@@ -39,26 +45,29 @@ export function PortalShell({ children }: { children: ReactNode }) {
         href="#portal-main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-white"
       >
-        Skip to content
+        {t('shell.skipToContent')}
       </a>
       <header className="border-b border-slate-200 bg-surface-raised">
         <div className="mx-auto flex max-w-3xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-semibold tracking-tight text-ink">
-            Fuatilia
-            <span className="ml-2 font-normal text-ink-soft">payer portal</span>
+            {t('common.brand')}
+            <span className="ml-2 font-normal text-ink-soft">{t('shell.payerPortal')}</span>
           </p>
-          <button
-            type="button"
-            className="w-fit rounded-md border border-slate-300 bg-surface-raised px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface-sunk focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              void signOut();
-            }}
-            disabled={signingOut}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </button>
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
+            <button
+              type="button"
+              className="w-fit rounded-md border border-slate-300 bg-surface-raised px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface-sunk focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void signOut();
+              }}
+              disabled={signingOut}
+            >
+              {signingOut ? t('shell.signingOut') : t('shell.signOut')}
+            </button>
+          </div>
         </div>
-        <nav aria-label="Portal" className="mx-auto max-w-3xl px-4 pb-2">
+        <nav aria-label={t('shell.navAriaLabel')} className="mx-auto max-w-3xl px-4 pb-2">
           <ul className="flex gap-1 overflow-x-auto">
             {PORTAL_NAV.map((item) => {
               const active = pathname === item.href;
@@ -73,7 +82,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
                         : 'text-ink-soft hover:bg-surface-sunk hover:text-ink'
                     }`}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </Link>
                 </li>
               );

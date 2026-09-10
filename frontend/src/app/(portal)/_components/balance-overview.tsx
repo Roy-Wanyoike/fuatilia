@@ -15,6 +15,7 @@ import type { FuatiliaClient, Refusal } from '@/lib/api/client';
 import type { Money } from '@/lib/api/envelope';
 import { portalClient } from '@/lib/portal/browser-client';
 import { derivePortalBalance, type PortalCountTotal } from '@/lib/portal/derive';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { formatMoney } from '@/lib/money';
 import { AccessRefused, isAccessRefusal } from './access-refused';
 
@@ -24,10 +25,13 @@ import { AccessRefused, isAccessRefusal } from './access-refused';
  * (bounded pagination walk). Every card renders one REAL state — loading,
  * refused (401/403), error (code + requestId), empty, or loaded — never a
  * fabricated number. Money is exact integer minor units via lib/money.ts;
- * mixed-currency books refuse to be totaled and say so (R10).
+ * mixed-currency books refuse to be totaled and say so (R10). All
+ * payer-facing strings resolve through the portal i18n catalogs (issue
+ * #149).
  */
 
 export function BalanceOverview({ client = portalClient }: { client?: FuatiliaClient }) {
+  const t = usePortalT();
   const receivablesQuery = useQuery({
     queryKey: ['portal', 'receivables', 'all'],
     queryFn: () => listAllReceivables(client),
@@ -65,56 +69,71 @@ export function BalanceOverview({ client = portalClient }: { client?: FuatiliaCl
   return (
     <section aria-labelledby="portal-balance-heading">
       <h1 id="portal-balance-heading" className="text-lg font-semibold text-ink">
-        Your balance
+        {t('balance.title')}
       </h1>
-      <p className="mt-0.5 text-sm text-ink-soft">
-        What you owe, what is overdue, and payments held on your account — actuals from the
-        billing system, nothing estimated.
-      </p>
+      <p className="mt-0.5 text-sm text-ink-soft">{t('balance.subtitle')}</p>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <BalanceCard
-          title="Outstanding"
-          caption="left to pay across open invoices"
+          title={t('balance.cards.outstanding.title')}
+          caption={t('balance.cards.outstanding.caption')}
           loading={receivablesQuery.isPending}
           refusal={receivablesRefusal}
-          refusedTitle="Your balance is not available"
-          refusedDescription="This portal session was refused access to your billing data."
+          refusedTitle={t('balance.cards.outstanding.refusedTitle')}
+          refusedDescription={t('common.refusedBillingDescription')}
           onRetry={() => {
             void receivablesQuery.refetch();
           }}
           sourceEmpty={receivablesSourceEmpty}
-          sourceEmptyCopy={{ title: 'No invoices on file yet', description: 'Nothing has been billed to your account so far.' }}
-          subsetEmptyCopy={{ title: 'Nothing outstanding', description: 'Every invoice on your account is settled.' }}
+          sourceEmptyCopy={{
+            title: t('common.noInvoicesTitle'),
+            description: t('common.noInvoicesDescription'),
+          }}
+          subsetEmptyCopy={{
+            title: t('balance.cards.outstanding.emptyTitle'),
+            description: t('balance.cards.outstanding.emptyDescription'),
+          }}
           value={receivableSummary === null ? null : receivableSummary.outstanding}
         />
         <BalanceCard
-          title="Overdue"
-          caption="past the due date"
+          title={t('balance.cards.overdue.title')}
+          caption={t('balance.cards.overdue.caption')}
           loading={receivablesQuery.isPending}
           refusal={receivablesRefusal}
-          refusedTitle="Your overdue position is not available"
-          refusedDescription="This portal session was refused access to your billing data."
+          refusedTitle={t('balance.cards.overdue.refusedTitle')}
+          refusedDescription={t('common.refusedBillingDescription')}
           onRetry={() => {
             void receivablesQuery.refetch();
           }}
           sourceEmpty={receivablesSourceEmpty}
-          sourceEmptyCopy={{ title: 'No invoices on file yet', description: 'Nothing has been billed to your account so far.' }}
-          subsetEmptyCopy={{ title: 'Nothing overdue', description: 'All your invoices are on schedule.' }}
+          sourceEmptyCopy={{
+            title: t('common.noInvoicesTitle'),
+            description: t('common.noInvoicesDescription'),
+          }}
+          subsetEmptyCopy={{
+            title: t('balance.cards.overdue.emptyTitle'),
+            description: t('balance.cards.overdue.emptyDescription'),
+          }}
           value={receivableSummary === null ? null : receivableSummary.overdue}
         />
         <BalanceCard
-          title="Held on account"
-          caption="paid but not yet applied to an invoice"
+          title={t('balance.cards.heldOnAccount.title')}
+          caption={t('balance.cards.heldOnAccount.caption')}
           loading={paymentsQuery.isPending}
           refusal={paymentsRefusal}
-          refusedTitle="Your payments are not available"
-          refusedDescription="This portal session was refused access to your payment data."
+          refusedTitle={t('balance.cards.heldOnAccount.refusedTitle')}
+          refusedDescription={t('common.refusedPaymentsDescription')}
           onRetry={() => {
             void paymentsQuery.refetch();
           }}
           sourceEmpty={paymentsSourceEmpty}
-          sourceEmptyCopy={{ title: 'No payments on file yet', description: 'No payments have been received on your account so far.' }}
-          subsetEmptyCopy={{ title: 'Nothing held on account', description: 'Every payment received has been applied to your invoices.' }}
+          sourceEmptyCopy={{
+            title: t('common.noPaymentsTitle'),
+            description: t('balance.cards.heldOnAccount.sourceEmptyDescription'),
+          }}
+          subsetEmptyCopy={{
+            title: t('balance.cards.heldOnAccount.emptyTitle'),
+            description: t('balance.cards.heldOnAccount.emptyDescription'),
+          }}
           value={paymentSummary === null ? null : paymentSummary.heldOnAccount}
         />
       </div>
@@ -153,6 +172,8 @@ function BalanceCard({
   const authRefused = refusal !== null && isAccessRefusal(refusal);
   const empty = refusal === null && value !== null && value.count === 0;
   const subsetEmpty = empty && !sourceEmpty;
+  const t = usePortalT();
+  const unavailableTitle = t('balance.cardUnavailable', { card: title });
 
   return (
     <Card
@@ -187,7 +208,7 @@ function BalanceCard({
         )}
         {!loading && refusal !== null && !authRefused && (
           <ErrorState
-            title={`${title} is unavailable`}
+            title={unavailableTitle}
             code={describeRefusalCode(refusal)}
             requestId={refusalRequestId(refusal)}
             message={refusalMessage(refusal)}
@@ -223,11 +244,12 @@ function TotalLine({
   mixedCurrency: boolean;
   caption: string;
 }) {
+  const t = usePortalT();
   if (total === null) {
     return mixedCurrency ? (
-      <span>mixed currencies on this account — count only (R10)</span>
+      <span>{t('balance.mixedCurrencyCountOnly')}</span>
     ) : (
-      <span>total beyond exact integer range — count only</span>
+      <span>{t('balance.rangeCountOnly')}</span>
     );
   }
   return (

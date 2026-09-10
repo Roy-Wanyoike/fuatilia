@@ -1,8 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import { LanguageToggle } from '@/lib/portal-i18n/language-toggle';
 import { AccessRefused } from './access-refused';
 
 /**
@@ -12,6 +14,8 @@ import { AccessRefused } from './access-refused';
  * SameSite=Strict cookie on success. The code is NEVER placed in a URL,
  * NEVER written to localStorage/sessionStorage, and after validation it
  * lives only in the httpOnly cookie — invisible to this component's JS.
+ * All payer-facing strings resolve through the portal i18n catalogs
+ * (issue #149).
  */
 
 interface GateRefusal {
@@ -24,6 +28,7 @@ type GatePhase = 'idle' | 'submitting' | 'refused' | 'unreachable';
 
 export function PortalGate() {
   const router = useRouter();
+  const t = usePortalT();
   const [code, setCode] = useState('');
   const [phase, setPhase] = useState<GatePhase>('idle');
   const [refusal, setRefusal] = useState<GateRefusal | null>(null);
@@ -33,7 +38,7 @@ export function PortalGate() {
     event.preventDefault();
     const trimmed = code.trim();
     if (trimmed.length === 0) {
-      setLocalError('Enter the access code you received.');
+      setLocalError(t('gate.emptyCodeError'));
       return;
     }
     setLocalError(null);
@@ -71,15 +76,14 @@ export function PortalGate() {
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
       <main id="main-content" className="w-full max-w-md">
         <div className="rounded-lg border border-slate-200 bg-surface-raised p-6 shadow-sm sm:p-8">
-          <h1 className="text-lg font-semibold text-ink">Fuatilia payer portal</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            See what you owe, what you have paid, and where your money was applied. Paste the
-            access code you received to begin.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-lg font-semibold text-ink">{t('gate.title')}</h1>
+          </div>
+          <p className="mt-2 text-sm text-ink-soft">{t('gate.intro')}</p>
 
           <form className="mt-5 flex flex-col gap-3" onSubmit={(event) => void handleSubmit(event)}>
             <label htmlFor="portal-access-code" className="text-sm font-medium text-ink">
-              Portal access code
+              {t('gate.codeLabel')}
             </label>
             <input
               id="portal-access-code"
@@ -96,9 +100,7 @@ export function PortalGate() {
               disabled={phase === 'submitting'}
             />
             <p id="portal-access-code-help" className="text-xs text-ink-soft">
-              The code is validated against the live API once, then held in an HTTP-only,
-              SameSite=Strict cookie and relayed to the API server-side. It is never placed in a
-              URL, never stored in your browser, and never readable by scripts on this page.
+              {t('gate.codeHelp')}
             </p>
             {localError !== null && (
               <p role="alert" className="text-sm text-danger" data-testid="gate-local-error">
@@ -106,15 +108,15 @@ export function PortalGate() {
               </p>
             )}
             <Button type="submit" disabled={phase === 'submitting'}>
-              {phase === 'submitting' ? 'Validating…' : 'Open my account'}
+              {phase === 'submitting' ? t('gate.submitting') : t('gate.submit')}
             </Button>
           </form>
 
           {phase === 'refused' && refusal !== null && (
             <div className="mt-5">
               <AccessRefused
-                title="This access code was not accepted"
-                description="Check the code and try again, or request a new portal access code from the biller."
+                title={t('gate.refusedTitle')}
+                description={t('gate.refusedDescription')}
                 code={refusal.code}
                 requestId={refusal.requestId}
                 message={refusal.message}
@@ -127,17 +129,26 @@ export function PortalGate() {
               className="mt-5 rounded-md border border-danger-soft bg-danger-soft/40 px-4 py-4"
               data-testid="gate-unreachable"
             >
-              <p className="text-sm font-medium text-danger">
-                The API could not be reached
-              </p>
-              <p className="mt-1 text-sm text-ink-soft">
-                The access code could not be validated, so nothing was unlocked. Try again in a
-                moment — no access is granted on an unverifiable code.
-              </p>
+              <p className="text-sm font-medium text-danger">{t('gate.unreachableTitle')}</p>
+              <p className="mt-1 text-sm text-ink-soft">{t('gate.unreachableBody')}</p>
             </div>
           )}
+          <div className="mt-5">
+            <LanguageToggleRow />
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+/** The gate speaks the payer's language before they have an account. */
+function LanguageToggleRow(): ReactNode {
+  const t = usePortalT();
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+      <span className="text-xs text-ink-soft">{t('language.label')}</span>
+      <LanguageToggle />
     </div>
   );
 }

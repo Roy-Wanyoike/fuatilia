@@ -96,6 +96,7 @@ export const en = {
         title: 'Held on account',
         caption: 'paid but not yet applied to an invoice',
         refusedTitle: 'Your payments are not available',
+        sourceEmptyDescription: 'No payments have been received on your account so far.',
         emptyTitle: 'Nothing held on account',
         emptyDescription: 'Every payment received has been applied to your invoices.',
       },

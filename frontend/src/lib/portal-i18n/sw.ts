@@ -90,6 +90,7 @@ export const sw = {
         title: 'Zilizoshikiliwa kwenye akaunti',
         caption: 'zimelipwa lakini hazijatumika kwenye ankara',
         refusedTitle: 'Malipo yako hayapatikani',
+        sourceEmptyDescription: 'Hakuna malipo yaliyopokelewa kwenye akaunti yako hadi sasa.',
         emptyTitle: 'Hakuna kilichoshikiliwa kwenye akaunti',
         emptyDescription: 'Malipo yote yaliyopokelewa yametumika kwenye ankara zako.',
       },
