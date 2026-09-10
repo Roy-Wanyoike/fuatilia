@@ -204,6 +204,48 @@ describe('Command Center loaded state', () => {
       'derived for 2026-09-04 (Africa/Nairobi)',
     );
   });
+
+  it('names the data table and scopes its column headers (a11y)', async () => {
+    renderScreen(
+      routeFetch({
+        '/v1/receivables': {
+          status: 200,
+          body: {
+            data: {
+              receivables: [specReceivable, syntheticReceivableDueToday, syntheticReceivableDeepAged],
+            },
+            meta: { pagination: { nextCursor: null, total: 3 } },
+          },
+        },
+        '/v1/payments': {
+          status: 200,
+          body: {
+            data: { payments: [specPayment, syntheticPaymentFullyApplied] },
+            meta: { pagination: { nextCursor: null, total: 2 } },
+          },
+        },
+        '/v1/collections/cases': {
+          status: 200,
+          body: {
+            data: {
+              cases: [specCase, syntheticPromisedCase, syntheticPromisedCaseMissed, syntheticDisputedCase],
+            },
+            meta: { pagination: { nextCursor: null, total: 4 } },
+          },
+        },
+      }),
+    );
+    await allCards('loaded');
+
+    // The embedded table carries its own accessible name (WCAG 1.3.1 — the
+    // card region alone does not identify the table for screen readers).
+    const table = screen.getByRole('table', { name: 'High-value opportunities' });
+    const headers = within(table).getAllByRole('columnheader');
+    expect(headers.map((header) => header.textContent)).toEqual(['Customer', 'Balance', 'Aging']);
+    for (const header of headers) {
+      expect(header).toHaveAttribute('scope', 'col');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

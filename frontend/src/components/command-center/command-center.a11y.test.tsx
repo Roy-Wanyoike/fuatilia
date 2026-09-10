@@ -75,4 +75,32 @@ describe('Command Center a11y baseline', () => {
     const footers = screen.getAllByText(/derivation: GET \/v1\//);
     expect(footers).toHaveLength(CARD_TITLES.length);
   });
+
+  it('respects prefers-reduced-motion — skeletons opt out of the pulse', () => {
+    renderPending();
+    for (const title of CARD_TITLES) {
+      const region = screen.getByRole('region', { name: title });
+      const skeletons = region.querySelectorAll('[aria-hidden="true"]');
+      expect(skeletons.length).toBeGreaterThan(0);
+      for (const skeleton of skeletons) {
+        // The Tailwind motion-reduce variant must ride on every pulsing
+        // block (WCAG 2.3.3 / vestibular safety).
+        expect(skeleton.className).toContain('motion-reduce:animate-none');
+      }
+    }
+  });
+
+  it('names every interactive control and gives it a visible-focus style', () => {
+    renderPending();
+    // The screen renders no links of its own (navigation lives in the shell,
+    // asserted in app-shell.a11y.test.tsx) — sweep whatever exists.
+    const controls = [...screen.getAllByRole('button'), ...screen.queryAllByRole('link')];
+    for (const control of controls) {
+      // No icon-only or nameless controls anywhere on the screen (WCAG 4.1.2).
+      expect(control).toHaveAccessibleName();
+    }
+    for (const button of screen.getAllByRole('button')) {
+      expect(button.className).toContain('focus-visible:outline-accent');
+    }
+  });
 });
