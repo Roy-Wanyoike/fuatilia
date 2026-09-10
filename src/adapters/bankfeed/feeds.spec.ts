@@ -135,10 +135,9 @@ describe('importStatement — the R9 door into intake + match core', () => {
     const replay = importStatement(args);
     expect(first.kind).toBe('imported');
     expect(replay.kind).toBe('duplicate_replay');
-    if (replay.kind === 'duplicate_replay') {
-      expect(replay.first).toEqual(first.statement);
-      expect(replay.first.totalMinor).toBe(248_050n);
-    }
+    if (first.kind !== 'imported' || replay.kind !== 'duplicate_replay') throw new Error('fixture');
+    expect(replay.first).toEqual(first.statement);
+    expect(replay.first.totalMinor).toBe(248_050n);
   });
 
   it('OUT-OF-ORDER entries produce the same truth (sorted by valueDate then reference)', () => {
