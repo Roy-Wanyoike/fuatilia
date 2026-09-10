@@ -1,4 +1,13 @@
 # PostgreSQL schema CI — runs db/validate.sh --ci against a postgres service.
+#
+# AUTH CONTRACT — this service MUST run with POSTGRES_HOST_AUTH_METHOD: trust.
+# db/migrate.cjs and db/smoke.cjs go through db/pgclient.cjs, a stdlib-only
+# wire-protocol client that speaks TRUST auth ONLY and refuses SASL/md5 loudly
+# (db/pgclient.cjs:117-121: `unsupported auth request (type %d) — this client
+# speaks trust auth only`). Without the trust override the postgres image
+# defaults to scram-sha-256 for host connections and every step dies before a
+# single migration is applied. PGPASSWORD is kept for tooling parity but is
+# unused under trust.
 name: db
 
 on:
@@ -7,10 +16,17 @@ on:
     paths: ["db/**", ".github/workflows/db.yml"]
   pull_request:
     paths: ["db/**", ".github/workflows/db.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   migrations:
-    runs-on: ubuntu-latest
+    name: migrations (apply ×2 — idempotency — + invariant smoke suite)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -18,6 +34,7 @@ jobs:
           POSTGRES_USER: fuatilia
           POSTGRES_PASSWORD: fuatilia
           POSTGRES_DB: fuatilia_validate
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 55432:5432
         options: >-
@@ -32,6 +49,8 @@ jobs:
       PGPASSWORD: fuatilia
       PGDATABASE: fuatilia_validate
     steps:
+      # actions/checkout v7 + setup-node v7 are real published majors
+      # (v7.0.1 / v7.0.0 are current releases of those actions).
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
