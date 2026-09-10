@@ -166,7 +166,9 @@ export function AppShell({
           </p>
         </nav>
 
-        <main id="main-content" className="min-w-0 flex-1">
+        {/* tabIndex={-1} makes the skip-link target receive focus (2.4.1):
+            without it the jump is scroll-only and focus stays on the link. */}
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
           {children}
         </main>
       </div>
