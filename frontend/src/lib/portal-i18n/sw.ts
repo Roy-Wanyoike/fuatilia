@@ -781,5 +781,18 @@ export const sw = {
       submit: 'Toka',
       submitting: 'Inatoka…',
     },
+
+    signInRequired: {
+      title: 'Ingia kwenye Fuatilia',
+      bodyLeadIn: 'Koni hii husoma kitambulisho chake cha bearer kutoka kwenye cookie ya kipindi ya HTTP-only (',
+      bodyRelay: '), ambayo API inaipeleka kama ',
+      bodyRest:
+        '. Cookie haiwasomeki kutoka kwa JavaScript ya kivinjari na haihifadhiwi kwenye localStorage.',
+      seamStatusLabel: 'Hali ya ngazi:',
+      seamNote:
+        'mkataba wa /v1 uliounganishwa (api/openapi/fuatilia.v1.yaml) unatoa kufuta vipindi lakini hautoi kutoa vipindi — operesheni ya kuingia huja na njia ya auth ya nyuma. Mpaka wakati huo lango hutekeleza ukaguzi wa uwepo wa mkataba wa cookie tu, na hakuna data ya dashibodi inayoweza kutengenezwa badala yake.',
+      devNote:
+        'Kwenye maendeleo, jaza cookie kwa kitambulisho halisi cha kipindi cha njia ya auth ili kujaribu njia ya kusoma; ona frontend/README.md "Auth at the seam".',
+    },
   },
 } satisfies Dictionary;

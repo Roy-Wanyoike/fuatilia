@@ -105,6 +105,7 @@ describe('missing-key refusal (tsc level — the documented pattern)', () => {
     expect(typeof translate(en, 'auth.meta.title')).toBe('string');
     expect(typeof translate(en, 'auth.signIn.credentialLabel')).toBe('string');
     expect(typeof translate(en, 'auth.signOut.submit')).toBe('string');
+    expect(typeof translate(en, 'auth.signInRequired.title')).toBe('string');
   });
 
   it('a key absent from the #180 sections is a TYPE error too — the pattern extends', () => {
@@ -253,6 +254,23 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
     expect(translate(en, 'auth.signIn.unreachableTitle')).toBe('The API could not be reached');
     expect(translate(en, 'auth.signOut.submit')).toBe('Sign out');
     expect(translate(en, 'auth.signOut.signInAgain')).toBe('Sign in again');
+    // The sign-in gate screen — dashboard-refusal.test.tsx pins the heading,
+    // the credential disclosure and the seam label; a11y pins the h1 too.
+    expect(translate(en, 'auth.signInRequired.title')).toBe('Sign in to Fuatilia');
+    expect(translate(en, 'auth.signInRequired.bodyLeadIn')).toBe(
+      'This console reads its bearer credential from an HTTP-only session cookie (',
+    );
+    expect(translate(en, 'auth.signInRequired.bodyRelay')).toBe('), which the API relays as ');
+    expect(translate(en, 'auth.signInRequired.bodyRest')).toBe(
+      '. The cookie is never readable from browser JavaScript and is never stored in localStorage.',
+    );
+    expect(translate(en, 'auth.signInRequired.seamStatusLabel')).toBe('Seam status:');
+    expect(translate(en, 'auth.signInRequired.seamNote')).toBe(
+      "the mounted /v1 contract (api/openapi/fuatilia.v1.yaml) exposes session revocation but not session issuance — the login operation lands with the backend auth lane. Until then the gate enforces the cookie contract's presence check only, and no dashboard data can be fabricated in its place.",
+    );
+    expect(translate(en, 'auth.signInRequired.devNote')).toBe(
+      'In development, seed the cookie with a real auth-lane session id to exercise the read path; see frontend/README.md "Auth at the seam".',
+    );
   });
 
   it('the shared refusal-envelope labels match the (auth) AccessRefused rendering', () => {
@@ -285,6 +303,8 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
     expect(translate(sw, 'dashboard.customers.directory.title')).toBe('Wateja');
     expect(translate(sw, 'auth.signIn.title')).toBe('Ingia kwenye Fuatilia');
     expect(translate(sw, 'auth.signOut.submit')).toBe('Toka');
+    expect(translate(sw, 'auth.signInRequired.title')).toBe('Ingia kwenye Fuatilia');
+    expect(translate(sw, 'auth.signInRequired.seamStatusLabel')).toBe('Hali ya ngazi:');
   });
 });
 

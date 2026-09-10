@@ -802,5 +802,18 @@ export const en = {
       submit: 'Sign out',
       submitting: 'Signing out…',
     },
+
+    signInRequired: {
+      title: 'Sign in to Fuatilia',
+      bodyLeadIn: 'This console reads its bearer credential from an HTTP-only session cookie (',
+      bodyRelay: '), which the API relays as ',
+      bodyRest:
+        '. The cookie is never readable from browser JavaScript and is never stored in localStorage.',
+      seamStatusLabel: 'Seam status:',
+      seamNote:
+        "the mounted /v1 contract (api/openapi/fuatilia.v1.yaml) exposes session revocation but not session issuance — the login operation lands with the backend auth lane. Until then the gate enforces the cookie contract's presence check only, and no dashboard data can be fabricated in its place.",
+      devNote:
+        'In development, seed the cookie with a real auth-lane session id to exercise the read path; see frontend/README.md "Auth at the seam".',
+    },
   },
 } as const;
