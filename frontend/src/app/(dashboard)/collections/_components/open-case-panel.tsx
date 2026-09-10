@@ -21,6 +21,7 @@ import {
   type CollectionsCaseClient,
 } from '@/lib/collections/case-ops';
 import { CASE_PRIORITIES } from '@/lib/api/wire-types';
+import { usePortalT } from '@/lib/portal-i18n/context';
 
 /**
  * The OPEN-CASE flow (issue #135) — POST /v1/collections/cases over one or
@@ -29,6 +30,8 @@ import { CASE_PRIORITIES } from '@/lib/api/wire-types';
  * collector can also paste an id that has not synced into the picker yet.
  * R8 exclusivity is the server's decision: a 409 CASE_ALREADY_OPEN envelope
  * (naming the covering case) surfaces verbatim with code + requestId.
+ * Strings resolve through the shared i18n catalogs (issue #180); the
+ * priority enum stays a wire value.
  */
 
 const RECEIVABLES_QUERY_KEY = ['api', 'receivables', 'open-case-picker'] as const;
@@ -46,6 +49,7 @@ export function OpenCasePanel({
   readClient = defaultClient,
   writeClient = defaultCollectionsClient,
 }: OpenCasePanelProps) {
+  const t = usePortalT();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -95,11 +99,11 @@ export function OpenCasePanel({
     const receivableIds = mergedIds();
     const trimmedCollector = collectorId.trim();
     if (receivableIds.length === 0) {
-      setLocalError('Select or paste at least one receivable id.');
+      setLocalError(t('dashboard.collections.open.localErrorNoIds'));
       return;
     }
     if (trimmedCollector.length === 0) {
-      setLocalError('A collector id is required.');
+      setLocalError(t('dashboard.collections.open.localErrorCollector'));
       return;
     }
     setLocalError(null);
@@ -127,11 +131,10 @@ export function OpenCasePanel({
       <CardHeader className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <CardTitle id="open-case-heading" className="text-base">
-            Open a case
+            {t('dashboard.collections.open.title')}
           </CardTitle>
           <CardDescription>
-            POST /v1/collections/cases — at most ONE open case per receivable
-            (R8); the wire refuses duplicates with 409 CASE_ALREADY_OPEN.
+            {t('dashboard.collections.open.description')}
           </CardDescription>
         </div>
         <Button
@@ -147,7 +150,7 @@ export function OpenCasePanel({
             setOpenedCase(null);
           }}
         >
-          {expanded ? 'Hide' : 'Open case…'}
+          {expanded ? t('dashboard.collections.open.hide') : t('dashboard.collections.open.toggle')}
         </Button>
       </CardHeader>
       {expanded && (
@@ -159,13 +162,13 @@ export function OpenCasePanel({
               data-testid="open-case-success"
             >
               <p className="font-medium text-ok">
-                Case {openedCase.caseNumber} opened.
+                {t('dashboard.collections.open.success', { caseNumber: openedCase.caseNumber })}
               </p>
               <Link
                 href={`/collections/${encodeURIComponent(openedCase.id)}`}
                 className="font-mono text-xs text-accent underline-offset-2 hover:underline"
               >
-                Work the case →
+                {t('dashboard.collections.open.workTheCase')}
               </Link>
             </div>
           )}
@@ -173,7 +176,7 @@ export function OpenCasePanel({
           {phase === 'refused' && refusal !== null && (
             <div className="mb-3">
               <ErrorState
-                title="Couldn't open the case"
+                title={t('dashboard.collections.open.refusedTitle')}
                 message={refusalMessage(refusal)}
                 code={describeRefusalCode(refusal)}
                 requestId={refusalRequestId(refusal)}
@@ -184,7 +187,7 @@ export function OpenCasePanel({
           {expanded && phase !== 'opened' && (
             <div className="space-y-4">
               <fieldset>
-                <legend className="text-sm font-medium text-ink">Receivables to cover</legend>
+                <legend className="text-sm font-medium text-ink">{t('dashboard.collections.open.receivablesLegend')}</legend>
                 {receivablesQuery.isPending && (
                   <div aria-busy="true" className="mt-2" data-testid="open-case-receivables-loading">
                     <SkeletonRows rows={2} />
@@ -193,7 +196,7 @@ export function OpenCasePanel({
                 {receivablesQuery.data !== undefined && !receivablesQuery.data.ok && (
                   <div className="mt-2">
                     <ErrorState
-                      title="Couldn't load receivables for picking"
+                      title={t('dashboard.collections.open.pickerRefusedTitle')}
                       message={refusalMessage(receivablesQuery.data.refusal)}
                       code={describeRefusalCode(receivablesQuery.data.refusal)}
                       requestId={refusalRequestId(receivablesQuery.data.refusal)}
@@ -203,8 +206,7 @@ export function OpenCasePanel({
                 )}
                 {receivablesQuery.data?.ok === true && rows.length === 0 && (
                   <p className="mt-2 text-xs text-ink-soft" data-testid="open-case-receivables-empty">
-                    No receivables on this deployment yet — paste ids below once
-                    invoices exist.
+                    {t('dashboard.collections.open.pickerEmpty')}
                   </p>
                 )}
                 {rows.length > 0 && (
@@ -232,20 +234,20 @@ export function OpenCasePanel({
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <label htmlFor="open-case-collector" className="text-sm font-medium text-ink">
-                    Collector id
+                    {t('dashboard.collections.open.collectorIdLabel')}
                   </label>
                   <input
                     id="open-case-collector"
                     type="text"
                     value={collectorId}
                     onChange={(event) => setCollectorId(event.target.value)}
-                    placeholder="UUID of the assigned collector"
+                    placeholder={t('dashboard.collections.open.collectorIdPlaceholder')}
                     className="mt-1 w-full rounded-md border border-slate-300 bg-surface-raised px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                 </div>
                 <div>
                   <label htmlFor="open-case-priority" className="text-sm font-medium text-ink">
-                    Priority
+                    {t('dashboard.collections.open.priorityLabel')}
                   </label>
                   <select
                     id="open-case-priority"
@@ -266,14 +268,14 @@ export function OpenCasePanel({
 
               <div>
                 <label htmlFor="open-case-pasted" className="text-sm font-medium text-ink">
-                  Additional receivable ids (optional)
+                  {t('dashboard.collections.open.additionalIdsLabel')}
                 </label>
                 <input
                   id="open-case-pasted"
                   type="text"
                   value={pastedIds}
                   onChange={(event) => setPastedIds(event.target.value)}
-                  placeholder="Comma- or space-separated UUIDs"
+                  placeholder={t('dashboard.collections.open.additionalIdsPlaceholder')}
                   className="mt-1 w-full rounded-md border border-slate-300 bg-surface-raised px-3 py-2 font-mono text-xs text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 />
               </div>
@@ -286,11 +288,13 @@ export function OpenCasePanel({
 
               <div className="flex items-center gap-2">
                 <Button onClick={() => void submit()} disabled={phase === 'submitting'}>
-                  {phase === 'submitting' ? 'Opening…' : 'Open case'}
+                  {phase === 'submitting'
+                    ? t('dashboard.collections.open.submitting')
+                    : t('dashboard.collections.open.submit')}
                 </Button>
                 {phase !== 'submitting' && (
                   <Button variant="ghost" size="sm" onClick={reset}>
-                    Reset
+                    {t('dashboard.collections.open.reset')}
                   </Button>
                 )}
               </div>

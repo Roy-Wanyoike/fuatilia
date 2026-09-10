@@ -12,6 +12,7 @@ import {
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { formatTimestamp } from '@/lib/collections/display';
 import { formatMoney, sumMoney } from '@/lib/money';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import type { Money } from '@/lib/api/envelope';
 import {
   CasePriorityBadge,
@@ -27,6 +28,8 @@ import {
  * from integer minor units via lib/money (exact BigInt arithmetic, R10).
  * A total exists ONLY when every covered receivable loaded and the
  * balances share one currency — otherwise the panel says so honestly.
+ * Strings resolve through the shared i18n catalogs (issue #180); the
+ * receivable state badge stays a wire value.
  */
 
 export type ReceivablesForCase =
@@ -40,6 +43,7 @@ export interface CaseSummaryProps {
 }
 
 export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
+  const t = usePortalT();
   const balances: Money[] =
     receivables.phase === 'loaded' ? receivables.receivables.map((r) => r.balance) : [];
   const total = receivables.phase === 'loaded' ? sumMoney(balances) : null;
@@ -52,7 +56,8 @@ export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
             <span className="font-mono">{caseView.caseNumber}</span>
           </CardTitle>
           <CardDescription>
-            <span className="font-mono">{caseView.id}</span> · collector{' '}
+            <span className="font-mono">{caseView.id}</span>{' '}
+            {t('dashboard.collections.summary.collectorPrefix')}{' '}
             <span className="font-mono">{caseView.collectorId}</span>
           </CardDescription>
         </div>
@@ -65,27 +70,27 @@ export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
       <CardContent className="space-y-3">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2" data-testid="case-summary-facts">
           <div className="flex gap-2">
-            <dt className="text-ink-soft">Opened</dt>
+            <dt className="text-ink-soft">{t('dashboard.collections.summary.opened')}</dt>
             <dd className="text-ink">{formatTimestamp(caseView.openedAt)}</dd>
           </div>
           <div className="flex gap-2">
-            <dt className="text-ink-soft">Opened by</dt>
+            <dt className="text-ink-soft">{t('dashboard.collections.summary.openedBy')}</dt>
             <dd className="font-mono text-ink">{caseView.openedBy}</dd>
           </div>
           {caseView.closedAt !== null && (
             <div className="flex gap-2">
-              <dt className="text-ink-soft">Closed</dt>
+              <dt className="text-ink-soft">{t('dashboard.collections.summary.closed')}</dt>
               <dd className="text-ink">{formatTimestamp(caseView.closedAt)}</dd>
             </div>
           )}
           {caseView.closedBy !== null && (
             <div className="flex gap-2">
-              <dt className="text-ink-soft">Closed by</dt>
+              <dt className="text-ink-soft">{t('dashboard.collections.summary.closedBy')}</dt>
               <dd className="font-mono text-ink">{caseView.closedBy}</dd>
             </div>
           )}
           <div className="flex gap-2">
-            <dt className="text-ink-soft">Covered receivables</dt>
+            <dt className="text-ink-soft">{t('dashboard.collections.summary.coveredReceivables')}</dt>
             <dd className="text-ink">{caseView.receivableIds.length}</dd>
           </div>
         </dl>
@@ -99,7 +104,7 @@ export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
         {receivables.phase === 'error' && (
           <div data-testid="case-summary-receivables-error">
             <ErrorState
-              title="Couldn't load the covered receivables"
+              title={t('dashboard.collections.summary.receivablesRefusedTitle')}
               message={refusalMessage(receivables.refusal)}
               code={describeRefusalCode(receivables.refusal)}
               requestId={refusalRequestId(receivables.refusal)}
@@ -120,7 +125,9 @@ export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
                   <span className="font-mono text-ink">{receivable.id}</span>
                   <span className="text-ink-soft">
                     {receivable.state}
-                    {receivable.overdue ? ' · overdue' : ''}
+                    {receivable.overdue
+                      ? ` ${t('dashboard.collections.summary.overdueSuffix')}`
+                      : ''}
                   </span>
                   <span className="font-semibold tabular-nums text-ink">
                     {formatMoney(receivable.balance)}
@@ -130,12 +137,13 @@ export function CaseSummary({ caseView, receivables }: CaseSummaryProps) {
             </ul>
             {total !== null ? (
               <p className="mt-2 text-sm font-semibold text-ink" data-testid="case-balance-total">
-                Outstanding: {formatMoney(total)}
+                {t('dashboard.collections.summary.outstandingTotal', {
+                  total: formatMoney(total),
+                })}
               </p>
             ) : (
               <p className="mt-2 text-xs text-ink-soft" data-testid="case-money-unavailable">
-                No single total: the covered balances do not share one currency (or exceed a
-                safe sum) — per-receivable balances above are the truth.
+                {t('dashboard.collections.summary.noSingleTotal')}
               </p>
             )}
           </div>

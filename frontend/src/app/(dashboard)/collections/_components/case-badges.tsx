@@ -1,11 +1,14 @@
+'use client';
+
 import { Badge } from '@/components/ui/badge';
 import type { CaseView } from '@/lib/api/wire-types';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import {
   derivedStatusBadgeTone,
   priorityBadgeTone,
   statusBadgeTone,
-  TRANSITION_LABELS,
 } from '@/lib/collections/state-machine';
+import { CASE_STATUS_LABEL_KEYS } from './case-labels';
 
 /**
  * State-machine badges for the collections workspace (issue #135). The
@@ -19,13 +22,17 @@ import {
  *   priority  — low/neutral, normal/info, high/warning, urgent/danger
  *
  * Every badge exposes a data-testid so component tests can pin the state
- * machine semantics per state.
+ * machine semantics per state. The stored status renders its HUMAN label
+ * from the shared catalog (Record<CaseStatus, LocaleKey> map, issue #180);
+ * the derived overlay and the priority stay WIRE VALUES — an operator
+ * correlates them with logs and the /v1 spec.
  */
 
 export function CaseStatusBadge({ status }: { status: CaseView['status'] }) {
+  const t = usePortalT();
   return (
     <Badge tone={statusBadgeTone(status)} data-testid="case-status-badge">
-      {TRANSITION_LABELS[status]}
+      {t(CASE_STATUS_LABEL_KEYS[status])}
     </Badge>
   );
 }

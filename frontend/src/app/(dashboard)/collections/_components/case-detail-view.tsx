@@ -17,6 +17,7 @@ import {
   defaultCollectionsClient,
   type CollectionsCaseClient,
 } from '@/lib/collections/case-ops';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { CaseActionLog } from './case-action-log';
 import { CaseCompleteActionPanel } from './case-complete-action-panel';
 import { CaseEscalationPanel } from './case-escalation-panel';
@@ -32,7 +33,8 @@ import { CaseTransitionPanel } from './case-transition-panel';
  * when the wire refuses (a foreign-org or unknown case answers 404
  * HTTP_CASE_NOT_FOUND — existence never leaks), and no optimistic
  * mutations: the flows replace the case view ONLY with the server's own
- * post-write answer, then re-sync the list read model.
+ * post-write answer, then re-sync the list read model. Strings resolve
+ * through the shared i18n catalogs (issue #180).
  */
 
 const detailQueryKey = (caseId: string) =>
@@ -51,6 +53,7 @@ export function CaseDetailView({
   readClient = defaultClient,
   writeClient = defaultCollectionsClient,
 }: CaseDetailViewProps) {
+  const t = usePortalT();
   const queryClient = useQueryClient();
 
   const caseQuery = useQuery({
@@ -116,10 +119,12 @@ export function CaseDetailView({
           href="/collections"
           className="text-xs text-accent underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          ← Back to cases
+          {t('dashboard.collections.detail.backToCases')}
         </Link>
         <h1 className="mt-1 text-lg font-semibold text-ink" data-testid="case-detail-heading">
-          {caseView !== null ? `Case ${caseView.caseNumber}` : 'Case'}
+          {caseView !== null
+            ? t('dashboard.collections.detail.heading', { caseNumber: caseView.caseNumber })
+            : t('dashboard.collections.detail.headingUnnamed')}
         </h1>
       </div>
 
@@ -132,7 +137,7 @@ export function CaseDetailView({
       {!caseQuery.isPending && caseRefusal !== null && (
         <div data-testid="case-detail-error">
           <ErrorState
-            title="Couldn't load the case"
+            title={t('dashboard.collections.detail.refusedTitle')}
             message={refusalMessage(caseRefusal)}
             code={describeRefusalCode(caseRefusal)}
             requestId={refusalRequestId(caseRefusal)}
