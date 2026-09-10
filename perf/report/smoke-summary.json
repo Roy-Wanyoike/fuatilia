@@ -1,0 +1,264 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "health: status 200": {
+                    "name": "health: status 200",
+                    "path": "::health: status 200",
+                    "id": "73274babb93df6aaf60956333620494b",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "health: x-request-id present": {
+                    "name": "health: x-request-id present",
+                    "path": "::health: x-request-id present",
+                    "id": "4e45f96bc4673837bc26db80fe8f852d",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "health: success envelope carries data": {
+                    "name": "health: success envelope carries data",
+                    "path": "::health: success envelope carries data",
+                    "id": "799b95f2478997dd209b942bdb418627",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "meta: status 200": {
+                    "name": "meta: status 200",
+                    "path": "::meta: status 200",
+                    "id": "83ca8615c461024e238b985e67cbf259",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "meta: x-request-id present": {
+                    "name": "meta: x-request-id present",
+                    "path": "::meta: x-request-id present",
+                    "id": "b9295d872b5867f409eeb6701f3cdd93",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "meta: success envelope carries data": {
+                    "name": "meta: success envelope carries data",
+                    "path": "::meta: success envelope carries data",
+                    "id": "29714ddb00196867bebed6d9f071a582",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "authed read: status 200": {
+                    "name": "authed read: status 200",
+                    "path": "::authed read: status 200",
+                    "id": "9d1ce467fdca98ba48571e2b60d3de57",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "authed read: x-request-id present": {
+                    "id": "662e960a4c0439199239b8b7f504ab78",
+                    "passes": 1333,
+                    "fails": 0,
+                    "name": "authed read: x-request-id present",
+                    "path": "::authed read: x-request-id present"
+                },
+                "authed read: success envelope carries data": {
+                    "id": "c0d471362092ab8d9ee5c0450c0a7186",
+                    "passes": 1333,
+                    "fails": 0,
+                    "name": "authed read: success envelope carries data",
+                    "path": "::authed read: success envelope carries data"
+                },
+                "smoke intake: status 201": {
+                    "id": "4fd908634a054dfa9ac09dd8de76f5b8",
+                    "passes": 1333,
+                    "fails": 0,
+                    "name": "smoke intake: status 201",
+                    "path": "::smoke intake: status 201"
+                },
+                "smoke intake: x-request-id present": {
+                    "name": "smoke intake: x-request-id present",
+                    "path": "::smoke intake: x-request-id present",
+                    "id": "046e529f9cbbd7f2a5b9689b1b46e576",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "smoke intake: success envelope carries data": {
+                    "passes": 1333,
+                    "fails": 0,
+                    "name": "smoke intake: success envelope carries data",
+                    "path": "::smoke intake: success envelope carries data",
+                    "id": "86eec232b736c28375b2dab449327acc"
+                },
+                "smoke confirm: status 201": {
+                    "fails": 0,
+                    "name": "smoke confirm: status 201",
+                    "path": "::smoke confirm: status 201",
+                    "id": "645fffc369c6245bae5bfe33a78924a3",
+                    "passes": 1333
+                },
+                "smoke confirm: x-request-id present": {
+                    "name": "smoke confirm: x-request-id present",
+                    "path": "::smoke confirm: x-request-id present",
+                    "id": "253b2dbf7474888c9b84f2392b88bae7",
+                    "passes": 1333,
+                    "fails": 0
+                },
+                "smoke confirm: success envelope carries data": {
+                    "passes": 1333,
+                    "fails": 0,
+                    "name": "smoke confirm: success envelope carries data",
+                    "path": "::smoke confirm: success envelope carries data",
+                    "id": "d5572d693cc602b843dc62a1089e9477"
+                }
+            }
+    },
+    "metrics": {
+        "vus_max": {
+            "value": 1,
+            "min": 1,
+            "max": 1
+        },
+        "http_req_duration{scenario:payments-write}": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "iteration_duration": {
+            "avg": 7.49387051537884,
+            "min": 4.307191,
+            "med": 5.441203,
+            "max": 37.870999,
+            "p(90)": 7.8015506,
+            "p(95)": 30.087272799999997
+        },
+        "http_req_waiting": {
+            "p(95)": 2.1170876,
+            "avg": 1.2593337081770464,
+            "min": 0.048389,
+            "med": 0.937565,
+            "max": 30.435442,
+            "p(90)": 1.8920290000000002
+        },
+        "http_req_connecting": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.000033661815453863466,
+            "min": 0,
+            "med": 0,
+            "max": 0.224356
+        },
+        "http_req_receiving": {
+            "med": 0.051664,
+            "max": 23.703082,
+            "p(90)": 0.06891800000000001,
+            "p(95)": 0.0749388,
+            "avg": 0.05434110412603157,
+            "min": 0.010628
+        },
+        "http_reqs": {
+            "rate": 666.2255218138904,
+            "count": 6665
+        },
+        "http_req_blocked": {
+            "max": 0.343664,
+            "p(90)": 0.00427,
+            "p(95)": 0.005892799999999996,
+            "avg": 0.002990306376594148,
+            "min": 0.00077,
+            "med": 0.002753
+        },
+        "data_received": {
+            "count": 7665424,
+            "rate": 766226.7223292901
+        },
+        "data_sent": {
+            "count": 1910417,
+            "rate": 190963.02516235964
+        },
+        "http_req_duration": {
+            "min": 0.065919,
+            "med": 1.006655,
+            "max": 30.511063,
+            "p(90)": 1.9743942,
+            "p(95)": 2.2070585999999994,
+            "avg": 1.3277637065266326
+        },
+        "http_req_duration{scenario:smoke}": {
+            "avg": 1.3277637065266326,
+            "min": 0.065919,
+            "med": 1.006655,
+            "max": 30.511063,
+            "p(90)": 1.9743942,
+            "p(95)": 2.2070585999999994,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 6665,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_sending": {
+            "max": 0.666821,
+            "p(90)": 0.017514800000000004,
+            "p(95)": 0.0208058,
+            "avg": 0.014088894223555849,
+            "min": 0.00276,
+            "med": 0.011715
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 1.3277637065266326,
+            "min": 0.065919,
+            "med": 1.006655,
+            "max": 30.511063,
+            "p(90)": 1.9743942,
+            "p(95)": 2.2070585999999994
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 1
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_duration{scenario:reads}": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<300": false
+            }
+        },
+        "checks": {
+            "passes": 19995,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.99": false
+            },
+            "value": 1
+        },
+        "iterations": {
+            "rate": 133.24510436277808,
+            "count": 1333
+        }
+    }
+}

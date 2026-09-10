@@ -1,0 +1,292 @@
+{
+    "metrics": {
+        "data_sent": {
+            "count": 15487556,
+            "rate": 258094.60271332075
+        },
+        "iterations": {
+            "count": 20055,
+            "rate": 334.20942964891606
+        },
+        "http_req_waiting": {
+            "max": 127.986246,
+            "p(90)": 11.776523899999994,
+            "p(95)": 28.56837499999999,
+            "avg": 6.892660744881323,
+            "min": 0.519127,
+            "med": 4.6572215
+        },
+        "vus_max": {
+            "value": 5,
+            "min": 5,
+            "max": 5
+        },
+        "data_received": {
+            "count": 80608126,
+            "rate": 1343305.70010112
+        },
+        "http_req_duration": {
+            "avg": 6.970735916950355,
+            "min": 0.550111,
+            "med": 4.720203,
+            "max": 128.02323,
+            "p(90)": 11.9083674,
+            "p(95)": 28.677604049999964
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 6.970735916950355,
+            "min": 0.550111,
+            "med": 4.720203,
+            "max": 128.02323,
+            "p(90)": 11.9083674,
+            "p(95)": 28.677604049999964
+        },
+        "vus": {
+            "max": 5,
+            "value": 5,
+            "min": 5
+        },
+        "checks": {
+            "passes": 122730,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.99": false
+            },
+            "value": 1
+        },
+        "http_req_duration{scenario:reads}": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<300": false
+            }
+        },
+        "http_reqs": {
+            "count": 41710,
+            "rate": 695.0822892374115
+        },
+        "http_req_blocked": {
+            "avg": 0.0038853537520978187,
+            "min": 0.000595,
+            "med": 0.002553,
+            "max": 24.827061,
+            "p(90)": 0.00383,
+            "p(95)": 0.005749549999999996
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_connecting": {
+            "avg": 0.0003644852553344522,
+            "min": 0,
+            "med": 0,
+            "max": 7.328433,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "iteration_duration": {
+            "med": 10.86813,
+            "max": 157.064721,
+            "p(90)": 34.525782600000014,
+            "p(95)": 38.78133609999999,
+            "avg": 14.942624110595878,
+            "min": 1.865271
+        },
+        "http_req_duration{scenario:payments-write}": {
+            "avg": 6.970735916950355,
+            "min": 0.550111,
+            "med": 4.720203,
+            "max": 128.02323,
+            "p(90)": 11.9083674,
+            "p(95)": 28.677604049999964,
+            "thresholds": {
+                "p(95)<400": false
+            }
+        },
+        "http_req_duration{scenario:smoke}": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_receiving": {
+            "p(90)": 0.0644881,
+            "p(95)": 0.07330864999999999,
+            "avg": 0.05987407321985149,
+            "min": 0.006903,
+            "med": 0.0467155,
+            "max": 27.699041
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 41710,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_sending": {
+            "avg": 0.01820109884919687,
+            "min": 0.002438,
+            "med": 0.010886,
+            "max": 28.446245,
+            "p(90)": 0.016249299999999994,
+            "p(95)": 0.020666749999999977
+        }
+    },
+    "root_group": {
+        "groups": {},
+        "checks": {
+                "intake: status 201": {
+                    "path": "::intake: status 201",
+                    "id": "7e8c4f70813bb1a8823d0fefbd1b41a5",
+                    "passes": 16055,
+                    "fails": 0,
+                    "name": "intake: status 201"
+                },
+                "intake: x-request-id present": {
+                    "name": "intake: x-request-id present",
+                    "path": "::intake: x-request-id present",
+                    "id": "6cf441819ce50f41dbeb1e5e738c9720",
+                    "passes": 16055,
+                    "fails": 0
+                },
+                "intake: success envelope carries data": {
+                    "fails": 0,
+                    "name": "intake: success envelope carries data",
+                    "path": "::intake: success envelope carries data",
+                    "id": "3f242ab4218a00fed1d170f0112fde90",
+                    "passes": 16055
+                },
+                "confirm: status 201": {
+                    "passes": 16055,
+                    "fails": 0,
+                    "name": "confirm: status 201",
+                    "path": "::confirm: status 201",
+                    "id": "ff482fb2bde3b7df067636ec22cc282a"
+                },
+                "confirm: x-request-id present": {
+                    "name": "confirm: x-request-id present",
+                    "path": "::confirm: x-request-id present",
+                    "id": "3b5b4cb2a43247476aab8e9c9de35b2d",
+                    "passes": 16055,
+                    "fails": 0
+                },
+                "confirm: success envelope carries data": {
+                    "path": "::confirm: success envelope carries data",
+                    "id": "bd173fca4a4ec70ea9090300dbb4b339",
+                    "passes": 16055,
+                    "fails": 0,
+                    "name": "confirm: success envelope carries data"
+                },
+                "intake (replay leg, first contact): status 201": {
+                    "id": "ef1f844c860a4f27acb5b9e2fdbce31e",
+                    "passes": 2400,
+                    "fails": 0,
+                    "name": "intake (replay leg, first contact): status 201",
+                    "path": "::intake (replay leg, first contact): status 201"
+                },
+                "intake (replay leg, first contact): x-request-id present": {
+                    "passes": 2400,
+                    "fails": 0,
+                    "name": "intake (replay leg, first contact): x-request-id present",
+                    "path": "::intake (replay leg, first contact): x-request-id present",
+                    "id": "fa9db0fe48418d6748c76ec08fea511a"
+                },
+                "intake (replay leg, first contact): success envelope carries data": {
+                    "name": "intake (replay leg, first contact): success envelope carries data",
+                    "path": "::intake (replay leg, first contact): success envelope carries data",
+                    "id": "eb6742309a276d83a26e397f556c580c",
+                    "passes": 2400,
+                    "fails": 0
+                },
+                "intake replay (duplicate:true): status 200": {
+                    "name": "intake replay (duplicate:true): status 200",
+                    "path": "::intake replay (duplicate:true): status 200",
+                    "id": "33e366976f6dcc8c993a8a1be3ccc6e4",
+                    "passes": 2400,
+                    "fails": 0
+                },
+                "intake replay (duplicate:true): x-request-id present": {
+                    "name": "intake replay (duplicate:true): x-request-id present",
+                    "path": "::intake replay (duplicate:true): x-request-id present",
+                    "id": "67043094474eead9d8708e97f3e147ad",
+                    "passes": 2400,
+                    "fails": 0
+                },
+                "intake replay (duplicate:true): success envelope carries data": {
+                    "fails": 0,
+                    "name": "intake replay (duplicate:true): success envelope carries data",
+                    "path": "::intake replay (duplicate:true): success envelope carries data",
+                    "id": "33c7ddbbe5f75940f4c9dcc6b48b0ffc",
+                    "passes": 2400
+                },
+                "intake replay: data.duplicate is true": {
+                    "passes": 2400,
+                    "fails": 0,
+                    "name": "intake replay: data.duplicate is true",
+                    "path": "::intake replay: data.duplicate is true",
+                    "id": "9537504ffdde8e651149212460ccf182"
+                },
+                "intake (read-your-write leg): status 201": {
+                    "passes": 1600,
+                    "fails": 0,
+                    "name": "intake (read-your-write leg): status 201",
+                    "path": "::intake (read-your-write leg): status 201",
+                    "id": "5f390005521c4369fae0685e136f304a"
+                },
+                "intake (read-your-write leg): x-request-id present": {
+                    "path": "::intake (read-your-write leg): x-request-id present",
+                    "id": "7f985b1046384639a4f07861246186d5",
+                    "passes": 1600,
+                    "fails": 0,
+                    "name": "intake (read-your-write leg): x-request-id present"
+                },
+                "intake (read-your-write leg): success envelope carries data": {
+                    "path": "::intake (read-your-write leg): success envelope carries data",
+                    "id": "6d647b2cf1cb970103f4c7a022a3e208",
+                    "passes": 1600,
+                    "fails": 0,
+                    "name": "intake (read-your-write leg): success envelope carries data"
+                },
+                "confirm (read-your-write leg): status 201": {
+                    "name": "confirm (read-your-write leg): status 201",
+                    "path": "::confirm (read-your-write leg): status 201",
+                    "id": "0167e777354ea005d1a82c468f55c73b",
+                    "passes": 1600,
+                    "fails": 0
+                },
+                "confirm (read-your-write leg): x-request-id present": {
+                    "name": "confirm (read-your-write leg): x-request-id present",
+                    "path": "::confirm (read-your-write leg): x-request-id present",
+                    "id": "a6c2cab24d6d99722bfbab6a2f437110",
+                    "passes": 1600,
+                    "fails": 0
+                },
+                "confirm (read-your-write leg): success envelope carries data": {
+                    "name": "confirm (read-your-write leg): success envelope carries data",
+                    "path": "::confirm (read-your-write leg): success envelope carries data",
+                    "id": "46bda3382b5cc4393e6c351bad7b72de",
+                    "passes": 1600,
+                    "fails": 0
+                }
+            },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+}
