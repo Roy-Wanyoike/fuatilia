@@ -52,6 +52,7 @@ export const ACTION_TYPES = [
   'escalate',
   'write_off',
   'refund',
+  'collect_now_stk_push',
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
