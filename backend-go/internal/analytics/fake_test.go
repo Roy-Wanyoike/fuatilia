@@ -144,20 +144,30 @@ func (f *fakeDriver) Query(_ context.Context, query string, args ...any) (Rows, 
 	return &fakeRows{rows: rows}, nil
 }
 
-// fakeRows is the ledger replay cursor.
+// fakeRows is the ledger replay cursor (database/sql semantics: Next
+// positions the cursor, Scan reads and advances past the current row).
 type fakeRows struct {
 	rows []ledgerRow
-	i    int
+	i    int // the CURRENT row index (Scan advances past it)
 	err  error
 }
 
-func (r *fakeRows) Next() bool { return r.i < len(r.rows) }
+func (r *fakeRows) Next() bool {
+	if r.err != nil {
+		return false
+	}
+	if r.i < len(r.rows) {
+		return true
+	}
+	return false
+}
 
 func (r *fakeRows) Scan(dest ...any) error {
 	if r.i >= len(r.rows) {
 		return errf(CodeDriverContractInvalid, "fake driver: Scan past end of rows")
 	}
 	row := r.rows[r.i]
+	r.i++ // advance on scan — one Scan per Next, cursor semantics
 	if len(dest) != 6 {
 		return errf(CodeDriverContractInvalid, "fake driver: Scan needs exactly 6 destinations, got %d", len(dest))
 	}
