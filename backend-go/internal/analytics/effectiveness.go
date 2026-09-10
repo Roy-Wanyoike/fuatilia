@@ -135,12 +135,13 @@ func windowContains(w effectivenessWindow, day int64) bool {
 }
 
 // endOfDayInstant is the as_of stamp for a day: the day's closing instant
-// (UTC last millisecond) — the instant every figure of that day was measured
-// at. Day-aligned windows close at the same instant, so dso_daily,
+// (UTC last millisecond, 23:59:59.999 — the same instant aging.ts's ms
+// fixtures treat as a day's end) — the instant every figure of that day was
+// measured at. Day-aligned windows close at the same instant, so dso_daily,
 // aging_migration, collector_effectiveness and cohort_recovery agree for the
 // same day.
 func endOfDayInstant(day int64) time.Time {
-	return time.Unix((day+1)*86400-1, int64(time.Millisecond)).UTC()
+	return time.Unix((day+1)*86400-1, int64(time.Millisecond)*999).UTC()
 }
 
 // dayStartInstant is the UTC midnight instant opening a day key.

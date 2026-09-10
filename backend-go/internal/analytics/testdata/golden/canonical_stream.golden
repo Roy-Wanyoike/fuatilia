@@ -1,0 +1,2250 @@
+exec 001: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000101"
+    "invoicing.invoiceIssued"
+    1
+    2025-01-01T00:00:00Z
+    "{\"invoiceId\":\"00000000-0000-4000-8000-000000000001\",\"customerId\":\"00000000-0000-4000-8000-000000000900\",\"totalMinor\":1000000,\"currency\":\"KES\",\"dueDate\":\"2025-01-31\"}"
+    "derived_from_events"
+    2025-01-01T00:00:00Z
+exec 002: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000102"
+    "receivable.opened"
+    1
+    2025-01-01T00:00:01Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000011\",\"invoiceId\":\"00000000-0000-4000-8000-000000000001\",\"originalMinor\":1000000,\"dueDate\":\"2025-01-31\"}"
+    "derived_from_events"
+    2025-01-01T00:00:01Z
+exec 003: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000103"
+    "invoicing.invoiceIssued"
+    1
+    2025-01-02T00:00:00Z
+    "{\"invoiceId\":\"00000000-0000-4000-8000-000000000003\",\"customerId\":\"00000000-0000-4000-8000-000000000900\",\"totalMinor\":750000,\"currency\":\"KES\",\"dueDate\":\"2025-01-15\"}"
+    "derived_from_events"
+    2025-01-02T00:00:00Z
+exec 004: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000104"
+    "receivable.partiallySettled"
+    1
+    2025-01-06T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000011\",\"amountMinor\":600000,\"remainingMinor\":400000}"
+    "derived_from_events"
+    2025-01-06T00:00:00Z
+exec 005: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000105"
+    "invoicing.invoiceVoided"
+    1
+    2025-01-11T00:00:00Z
+    "{\"invoiceId\":\"00000000-0000-4000-8000-000000000003\",\"reason\":\"duplicate billing — voided\",\"actorId\":\"00000000-0000-4000-8000-000000000901\"}"
+    "derived_from_events"
+    2025-01-11T00:00:00Z
+exec 006: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000106"
+    "receivable.settled"
+    1
+    2025-02-10T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000011\",\"settledAt\":\"2025-02-10T00:00:00Z\"}"
+    "derived_from_events"
+    2025-02-10T00:00:00Z
+exec 007: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000107"
+    "invoicing.invoiceIssued"
+    1
+    2025-02-15T00:00:00Z
+    "{\"invoiceId\":\"00000000-0000-4000-8000-000000000002\",\"customerId\":\"00000000-0000-4000-8000-000000000900\",\"totalMinor\":2500000,\"currency\":\"KES\",\"dueDate\":\"2025-02-20\"}"
+    "derived_from_events"
+    2025-02-15T00:00:00Z
+exec 008: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000108"
+    "receivable.opened"
+    1
+    2025-02-15T00:00:01Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000012\",\"invoiceId\":\"00000000-0000-4000-8000-000000000002\",\"originalMinor\":2500000,\"dueDate\":\"2025-02-20\"}"
+    "derived_from_events"
+    2025-02-15T00:00:01Z
+exec 009: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000109"
+    "receivable.overdue"
+    1
+    2025-02-27T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000012\",\"daysLate\":12,\"agingBucket\":\"31-60\"}"
+    "derived_from_events"
+    2025-02-27T00:00:00Z
+exec 010: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000110"
+    "receivable.writtenOff"
+    1
+    2025-03-17T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000012\",\"reason\":\"irrecoverable — approved\",\"approvedBy\":\"00000000-0000-4000-8000-000000000902\"}"
+    "derived_from_events"
+    2025-03-17T00:00:00Z
+exec 011: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000111"
+    "receivable.recovered"
+    1
+    2025-03-22T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000012\",\"amountMinor\":300000}"
+    "derived_from_events"
+    2025-03-22T00:00:00Z
+exec 012: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000112"
+    "collections.promiseBroken"
+    1
+    2025-03-24T00:00:00Z
+    "{\"promiseId\":\"00000000-0000-4000-8000-000000000021\",\"caseId\":\"00000000-0000-4000-8000-000000000022\",\"expectedAt\":\"2025-03-21T00:00:00Z\"}"
+    "derived_from_events"
+    2025-03-24T00:00:00Z
+exec 013: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "00000000-0000-4000-8000-000000000113"
+    "payment.confirmed"
+    1
+    2025-03-25T00:00:00Z
+    "{\"paymentId\":\"00000000-0000-4000-8000-000000000031\",\"confirmedMinor\":500000}"
+    "derived_from_events"
+    2025-03-25T00:00:00Z
+exec 014: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    1000000
+    1u
+    0u
+    1000000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 015: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "current"
+    1000000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 016: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 017: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 018: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 019: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 020: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    1000000
+    1u
+    0u
+    1000000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 021: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "current"
+    1000000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 022: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 023: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 024: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 025: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 026: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    400000
+    1u
+    0u
+    1000000
+    30u
+    12
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 027: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 028: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 029: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 030: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 031: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 032: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    400000
+    1u
+    0u
+    1000000
+    30u
+    12
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 033: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 034: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 035: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 036: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 037: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 038: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    0
+    0u
+    1u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 039: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 040: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 041: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 042: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 043: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 044: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    2500000
+    1u
+    1u
+    2500000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 045: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "current"
+    2500000
+    1u
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 046: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 047: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 048: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 049: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 050: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    0
+    0u
+    2u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 051: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 052: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 053: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 054: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 055: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 056: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    0
+    0u
+    2u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 057: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 058: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 059: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 060: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 061: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 062: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-03T00:00:00Z
+    2025-01-01T00:00:00Z
+    ""
+    0
+    1000000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000001"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 063: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-04T00:00:00Z
+    2025-01-02T00:00:00Z
+    ""
+    0
+    1000000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 064: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-08T00:00:00Z
+    2025-01-06T00:00:00Z
+    ""
+    600000
+    1000000
+    0.6
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 065: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-13T00:00:00Z
+    2025-01-11T00:00:00Z
+    ""
+    600000
+    1000000
+    0.6
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 066: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-12T00:00:00Z
+    2025-02-10T00:00:00Z
+    ""
+    400000
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 067: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-17T00:00:00Z
+    2025-02-15T00:00:00Z
+    ""
+    400000
+    2500000
+    0.16
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000002"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 068: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-16T00:00:00Z
+    2025-03-17T00:00:00Z
+    ""
+    0
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 069: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-21T00:00:00Z
+    2025-03-22T00:00:00Z
+    ""
+    300000
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 070: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-23T00:00:00Z
+    2025-03-24T00:00:00Z
+    ""
+    300000
+    0
+    <NULL>
+    "no billed amount in window"
+    1u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-24T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 071: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    0u
+    0
+    1000000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 072: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    5u
+    600000
+    1000000
+    0.6
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 073: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    40u
+    1000000
+    1000000
+    1
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 074: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-01T00:00:00Z
+    0u
+    0
+    2500000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-02-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 075: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-01T00:00:00Z
+    49u
+    300000
+    2500000
+    0.12
+    ""
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 076: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "00000000-0000-4000-8000-000000000114"
+    "invoicing.invoiceIssued"
+    1
+    2025-01-21T00:00:00Z
+    "{\"invoiceId\":\"00000000-0000-4000-8000-000000000041\",\"customerId\":\"00000000-0000-4000-8000-000000000900\",\"totalMinor\":500000,\"currency\":\"USD\",\"dueDate\":\"2025-02-10\"}"
+    "derived_from_events"
+    2025-01-21T00:00:00Z
+exec 077: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "00000000-0000-4000-8000-000000000115"
+    "receivable.opened"
+    1
+    2025-01-21T00:00:01Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000042\",\"invoiceId\":\"00000000-0000-4000-8000-000000000041\",\"originalMinor\":500000,\"dueDate\":\"2025-02-10\"}"
+    "derived_from_events"
+    2025-01-21T00:00:01Z
+exec 078: INSERT INTO event_fact (org_id, event_id, name, version, created_at, payload, label, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "00000000-0000-4000-8000-000000000116"
+    "receivable.partiallySettled"
+    1
+    2025-01-26T00:00:00Z
+    "{\"receivableId\":\"00000000-0000-4000-8000-000000000042\",\"amountMinor\":100000,\"remainingMinor\":400000}"
+    "derived_from_events"
+    2025-01-26T00:00:00Z
+exec 079: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    500000
+    1u
+    0u
+    500000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 080: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "current"
+    500000
+    1u
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 081: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 082: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 083: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 084: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 085: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    400000
+    1u
+    0u
+    500000
+    30u
+    24
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 086: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 087: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 088: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 089: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 090: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 091: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2024-12-23T00:00:00Z
+    2025-01-21T00:00:00Z
+    ""
+    0
+    500000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000041"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 092: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2024-12-28T00:00:00Z
+    2025-01-26T00:00:00Z
+    ""
+    100000
+    500000
+    0.2
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000042" "00000000-0000-4000-8000-000000000041"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 093: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-01T00:00:00Z
+    0u
+    0
+    500000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 094: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-01T00:00:00Z
+    25u
+    100000
+    500000
+    0.2
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 095: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    1000000
+    1u
+    0u
+    1000000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 096: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "current"
+    1000000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 097: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 098: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 099: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 100: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 101: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    1000000
+    1u
+    0u
+    1000000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 102: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "current"
+    1000000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 103: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 104: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 105: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 106: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-02T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 107: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    400000
+    1u
+    0u
+    1000000
+    30u
+    12
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 108: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 109: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 110: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 111: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 112: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-06T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 113: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    400000
+    1u
+    0u
+    1000000
+    30u
+    12
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 114: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 115: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 116: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 117: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 118: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-11T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 119: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    0
+    0u
+    1u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 120: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 121: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 122: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 123: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 124: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-10T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 125: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    2500000
+    1u
+    1u
+    2500000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 126: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "current"
+    2500000
+    1u
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 127: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 128: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 129: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 130: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-15T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 131: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    0
+    0u
+    2u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 132: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 133: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 134: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 135: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 136: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-17T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 137: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    0
+    0u
+    2u
+    0
+    30u
+    <NULL>
+    "no billed amount in trailing 30-day window"
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 138: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "current"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 139: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 140: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 141: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 142: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-03-22T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 143: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-03T00:00:00Z
+    2025-01-01T00:00:00Z
+    ""
+    0
+    1000000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000001"]
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 144: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-04T00:00:00Z
+    2025-01-02T00:00:00Z
+    ""
+    0
+    1000000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-02T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 145: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-08T00:00:00Z
+    2025-01-06T00:00:00Z
+    ""
+    600000
+    1000000
+    0.6
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 146: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2024-12-13T00:00:00Z
+    2025-01-11T00:00:00Z
+    ""
+    600000
+    1000000
+    0.6
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"]
+    "derived_from_events"
+    2025-01-11T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 147: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-12T00:00:00Z
+    2025-02-10T00:00:00Z
+    ""
+    400000
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 148: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-17T00:00:00Z
+    2025-02-15T00:00:00Z
+    ""
+    400000
+    2500000
+    0.16
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000002"]
+    "derived_from_events"
+    2025-02-15T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 149: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-16T00:00:00Z
+    2025-03-17T00:00:00Z
+    ""
+    0
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    []
+    "derived_from_events"
+    2025-03-17T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 150: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-21T00:00:00Z
+    2025-03-22T00:00:00Z
+    ""
+    300000
+    0
+    <NULL>
+    "no billed amount in window"
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 151: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-23T00:00:00Z
+    2025-03-24T00:00:00Z
+    ""
+    300000
+    0
+    <NULL>
+    "no billed amount in window"
+    1u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-24T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 152: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    0u
+    0
+    1000000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 153: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    5u
+    600000
+    1000000
+    0.6
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-01-06T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 154: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-01-01T00:00:00Z
+    40u
+    1000000
+    1000000
+    1
+    ""
+    ["00000000-0000-4000-8000-000000000011"]
+    "derived_from_events"
+    2025-02-10T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 155: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-01T00:00:00Z
+    0u
+    0
+    2500000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-02-01T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 156: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000001"
+    "KES"
+    2025-02-01T00:00:00Z
+    49u
+    300000
+    2500000
+    0.12
+    ""
+    ["00000000-0000-4000-8000-000000000012"]
+    "derived_from_events"
+    2025-03-22T23:59:59.999Z
+    2025-03-25T00:00:00Z
+exec 157: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    500000
+    1u
+    0u
+    500000
+    30u
+    30
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 158: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "current"
+    500000
+    1u
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 159: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 160: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 161: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 162: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-21T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 163: INSERT INTO dso_daily (org_id, currency, day, ar_balance_minor, receivables_aged, zero_balance_receivables, billed_trailing_minor, dso_window_days, dso, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    400000
+    1u
+    0u
+    500000
+    30u
+    24
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 164: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "current"
+    400000
+    1u
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 165: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "1-30"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 166: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "31-60"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 167: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "61-90"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 168: INSERT INTO aging_migration (org_id, currency, day, bucket, amount_minor, receivable_count, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-26T00:00:00Z
+    "90+"
+    0
+    0u
+    []
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 169: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2024-12-23T00:00:00Z
+    2025-01-21T00:00:00Z
+    ""
+    0
+    500000
+    0
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000041"]
+    "derived_from_events"
+    2025-01-21T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 170: INSERT INTO collector_effectiveness (org_id, currency, window_start, window_end, collector_id, collected_minor, billed_minor, collected_vs_billed, collected_vs_billed_reason, promises_broken, promise_kept, promise_kept_reason, disputes_raised, dispute_rate, dispute_rate_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2024-12-28T00:00:00Z
+    2025-01-26T00:00:00Z
+    ""
+    100000
+    500000
+    0.2
+    ""
+    0u
+    <NULL>
+    "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)"
+    0u
+    <NULL>
+    "no dispute event in the v1 event catalog"
+    ["00000000-0000-4000-8000-000000000042" "00000000-0000-4000-8000-000000000041"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 171: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-01T00:00:00Z
+    0u
+    0
+    500000
+    0
+    ""
+    []
+    "derived_from_events"
+    2025-01-01T23:59:59.999Z
+    2025-01-26T00:00:00Z
+exec 172: INSERT INTO cohort_recovery (org_id, currency, cohort_month, days_since_open, collected_cumulative_minor, original_cumulative_minor, recovery_rate, null_reason, evidence_refs, label, as_of, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "00000000-0000-4000-8000-000000000002"
+    "USD"
+    2025-01-01T00:00:00Z
+    25u
+    100000
+    500000
+    0.2
+    ""
+    ["00000000-0000-4000-8000-000000000042"]
+    "derived_from_events"
+    2025-01-26T23:59:59.999Z
+    2025-01-26T00:00:00Z
+
+-- final projection state --
+table aging_migration
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, "current", 1000000, 1u, ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, "current", 1000000, 1u, ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, "current", 400000, 1u, ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, "current", 400000, 1u, ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, "current", 0, 0u, [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, "current", 2500000, 1u, ["00000000-0000-4000-8000-000000000012"], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, "current", 0, 0u, [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, "current", 0, 0u, [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, "current", 500000, 1u, ["00000000-0000-4000-8000-000000000042"], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|"1-30"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, "1-30", 0, 0u, [], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|"31-60"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, "31-60", 0, 0u, [], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|"61-90"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, "61-90", 0, 0u, [], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|"90+"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, "90+", 0, 0u, [], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|"current"]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, "current", 400000, 1u, ["00000000-0000-4000-8000-000000000042"], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+table cohort_recovery
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|0u]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, 0u, 0, 1000000, 0, "", [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|40u]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, 40u, 1000000, 1000000, 1, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|5u]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, 5u, 600000, 1000000, 0.6, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-01T00:00:00Z|0u]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-01T00:00:00Z, 0u, 0, 2500000, 0, "", [], "derived_from_events", 2025-02-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-01T00:00:00Z|49u]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-01T00:00:00Z, 49u, 300000, 2500000, 0.12, "", ["00000000-0000-4000-8000-000000000012"], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-01T00:00:00Z|0u]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-01T00:00:00Z, 0u, 0, 500000, 0, "", [], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-01T00:00:00Z|25u]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-01T00:00:00Z, 25u, 100000, 500000, 0.2, "", ["00000000-0000-4000-8000-000000000042"], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+table collector_effectiveness
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2024-12-03T00:00:00Z, 2025-01-01T00:00:00Z, "", 0, 1000000, 0, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000001"], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2024-12-04T00:00:00Z, 2025-01-02T00:00:00Z, "", 0, 1000000, 0, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2024-12-08T00:00:00Z, 2025-01-06T00:00:00Z, "", 600000, 1000000, 0.6, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2024-12-13T00:00:00Z, 2025-01-11T00:00:00Z, "", 600000, 1000000, 0.6, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000001" "00000000-0000-4000-8000-000000000003"], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-12T00:00:00Z, 2025-02-10T00:00:00Z, "", 400000, 0, <NULL>, "no billed amount in window", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-17T00:00:00Z, 2025-02-15T00:00:00Z, "", 400000, 2500000, 0.16, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000011" "00000000-0000-4000-8000-000000000002"], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-16T00:00:00Z, 2025-03-17T00:00:00Z, "", 0, 0, <NULL>, "no billed amount in window", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-21T00:00:00Z, 2025-03-22T00:00:00Z, "", 300000, 0, <NULL>, "no billed amount in window", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000012"], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-24T00:00:00Z|""]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-23T00:00:00Z, 2025-03-24T00:00:00Z, "", 300000, 0, <NULL>, "no billed amount in window", 1u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000012"], "derived_from_events", 2025-03-24T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z|""]: "00000000-0000-4000-8000-000000000002", "USD", 2024-12-23T00:00:00Z, 2025-01-21T00:00:00Z, "", 0, 500000, 0, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000041"], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z|""]: "00000000-0000-4000-8000-000000000002", "USD", 2024-12-28T00:00:00Z, 2025-01-26T00:00:00Z, "", 100000, 500000, 0.2, "", 0u, <NULL>, "no promise-made/kept event in the v1 event catalog (only collections.promiseBroken exists)", 0u, <NULL>, "no dispute event in the v1 event catalog", ["00000000-0000-4000-8000-000000000042" "00000000-0000-4000-8000-000000000041"], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
+table dso_daily
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-01T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-01T00:00:00Z, 1000000, 1u, 0u, 1000000, 30u, 30, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-01T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-02T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-02T00:00:00Z, 1000000, 1u, 0u, 1000000, 30u, 30, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-02T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-06T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-06T00:00:00Z, 400000, 1u, 0u, 1000000, 30u, 12, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-06T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-01-11T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-01-11T00:00:00Z, 400000, 1u, 0u, 1000000, 30u, 12, "", ["00000000-0000-4000-8000-000000000011"], "derived_from_events", 2025-01-11T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-10T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-10T00:00:00Z, 0, 0u, 1u, 0, 30u, <NULL>, "no billed amount in trailing 30-day window", [], "derived_from_events", 2025-02-10T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-02-15T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-02-15T00:00:00Z, 2500000, 1u, 1u, 2500000, 30u, 30, "", ["00000000-0000-4000-8000-000000000012"], "derived_from_events", 2025-02-15T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-17T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-17T00:00:00Z, 0, 0u, 2u, 0, 30u, <NULL>, "no billed amount in trailing 30-day window", [], "derived_from_events", 2025-03-17T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000001"|"KES"|2025-03-22T00:00:00Z]: "00000000-0000-4000-8000-000000000001", "KES", 2025-03-22T00:00:00Z, 0, 0u, 2u, 0, 30u, <NULL>, "no billed amount in trailing 30-day window", [], "derived_from_events", 2025-03-22T23:59:59.999Z, 2025-03-25T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-21T00:00:00Z]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-21T00:00:00Z, 500000, 1u, 0u, 500000, 30u, 30, "", ["00000000-0000-4000-8000-000000000042"], "derived_from_events", 2025-01-21T23:59:59.999Z, 2025-01-26T00:00:00Z
+  row["00000000-0000-4000-8000-000000000002"|"USD"|2025-01-26T00:00:00Z]: "00000000-0000-4000-8000-000000000002", "USD", 2025-01-26T00:00:00Z, 400000, 1u, 0u, 500000, 30u, 24, "", ["00000000-0000-4000-8000-000000000042"], "derived_from_events", 2025-01-26T23:59:59.999Z, 2025-01-26T00:00:00Z
