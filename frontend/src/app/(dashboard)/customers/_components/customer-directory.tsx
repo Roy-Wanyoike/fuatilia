@@ -17,6 +17,7 @@ import { defaultClient } from '@/lib/api/browser-client';
 import type { FuatiliaClient, Refusal } from '@/lib/api/client';
 import { listAllPayments, listAllReceivables } from '@/lib/api/pagination';
 import { deriveCustomerDirectory, type CustomerDirectoryEntry } from '@/lib/customers/derive';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { formatMoney } from '@/lib/money';
 
 /**
@@ -27,13 +28,15 @@ import { formatMoney } from '@/lib/money';
  * the receivable + payment read models (both walked with the bounded
  * pagination helper, cap disclosed when hit). Payments with a null
  * customerId are unattributable and never mint a customer. Each row links
- * to the per-customer 360 view.
+ * to the per-customer 360 view. Strings resolve through the shared i18n
+ * catalogs (issue #180).
  */
 
 const RECEIVABLES_KEY = ['api', 'receivables', 'all'] as const;
 const PAYMENTS_KEY = ['api', 'payments', 'all'] as const;
 
 export function CustomerDirectory({ client = defaultClient }: { client?: FuatiliaClient }) {
+  const t = usePortalT();
   const receivablesQuery = useQuery({
     queryKey: RECEIVABLES_KEY,
     queryFn: () => listAllReceivables(client),
@@ -90,25 +93,26 @@ export function CustomerDirectory({ client = defaultClient }: { client?: Fuatili
   return (
     <section aria-labelledby="customers-heading">
       <h1 id="customers-heading" className="text-lg font-semibold text-ink">
-        Customers
+        {t('dashboard.customers.directory.title')}
       </h1>
       <p className="mt-0.5 max-w-2xl text-sm text-ink-soft">
-        Customer 360. Identities are derived from the receivable and payment read models — the
-        /v1 contract mounts no customer directory yet.
+        {t('dashboard.customers.directory.subtitle')}
       </p>
 
       <Card
         role="region"
-        aria-label="Customer directory"
+        aria-label={t('dashboard.customers.directory.regionLabel')}
         aria-busy={state === 'loading'}
         data-state={state}
         className="mt-4"
       >
         <CardHeader>
           <CardTitle>
-            Directory{' '}
+            {t('dashboard.customers.directory.cardTitle')}{' '}
             {state === 'loaded' && (
-              <span className="font-normal text-ink-faint">· {entries.length} derived</span>
+              <span className="font-normal text-ink-faint">
+                {t('dashboard.customers.directory.derivedCount', { count: entries.length })}
+              </span>
             )}
           </CardTitle>
         </CardHeader>
@@ -116,7 +120,7 @@ export function CustomerDirectory({ client = defaultClient }: { client?: Fuatili
           {state === 'loading' && <SkeletonRows rows={5} />}
           {state === 'error' && refusal !== null && (
             <ErrorState
-              title="The customer directory is unavailable"
+              title={t('dashboard.customers.directory.refusedTitle')}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
               message={refusalMessage(refusal)}
@@ -125,9 +129,9 @@ export function CustomerDirectory({ client = defaultClient }: { client?: Fuatili
           )}
           {state === 'empty' && (
             <EmptyState
-              title="No customer activity yet"
-              description="Neither the receivable nor the payment read model returned rows, so no customer identities can be derived yet."
-              hint="Rows arrive through the invoicing flow and the Daraja intake funnel."
+              title={t('dashboard.customers.directory.emptyTitle')}
+              description={t('dashboard.customers.directory.emptyDescription')}
+              hint={t('dashboard.customers.directory.emptyHint')}
             />
           )}
           {state === 'loaded' && <DirectoryRows entries={entries} />}
@@ -138,15 +142,11 @@ export function CustomerDirectory({ client = defaultClient }: { client?: Fuatili
             className="mx-4 mb-3 rounded-md border border-warn-soft bg-warn-soft/40 px-3 py-2 text-xs text-ink-soft"
             data-testid="directory-truncated"
           >
-            Large dataset: the read path stopped at the payload-conscious page cap, so this
-            directory covers the fetched rows only.
+            {t('dashboard.customers.directory.truncatedNote')}
           </p>
         )}
         <CardFooter>
-          <span className="font-mono">
-            derivation: GET /v1/receivables + GET /v1/payments — distinct customerId (payments
-            without a customerId are unattributable)
-          </span>
+          <span className="font-mono">{t('dashboard.customers.directory.footer')}</span>
         </CardFooter>
       </Card>
     </section>
@@ -154,17 +154,18 @@ export function CustomerDirectory({ client = defaultClient }: { client?: Fuatili
 }
 
 function DirectoryRows({ entries }: { entries: readonly CustomerDirectoryEntry[] }) {
+  const t = usePortalT();
   return (
     <Table>
       <THead>
         <TR>
-          <TH scope="col">Customer</TH>
-          <TH scope="col">Outstanding</TH>
-          <TH scope="col">Overdue</TH>
-          <TH scope="col">Receivables</TH>
-          <TH scope="col">Last activity</TH>
+          <TH scope="col">{t('dashboard.customers.directory.col.customer')}</TH>
+          <TH scope="col">{t('dashboard.customers.directory.col.outstanding')}</TH>
+          <TH scope="col">{t('dashboard.customers.directory.col.overdue')}</TH>
+          <TH scope="col">{t('dashboard.customers.directory.col.receivables')}</TH>
+          <TH scope="col">{t('dashboard.customers.directory.col.lastActivity')}</TH>
           <TH scope="col">
-            <span className="sr-only">Open the 360 view</span>
+            <span className="sr-only">{t('dashboard.customers.directory.open360SrOnly')}</span>
           </TH>
         </TR>
       </THead>
@@ -178,11 +179,11 @@ function DirectoryRows({ entries }: { entries: readonly CustomerDirectoryEntry[]
                 {entry.outstanding.total === null ? (
                   entry.outstanding.mixedCurrency ? (
                     <span className="text-xs text-ink-soft">
-                      mixed currencies — count only (R10)
+                      {t('dashboard.customers.directory.mixedCurrencyCountOnly')}
                     </span>
                   ) : (
                     <span className="text-xs text-ink-soft">
-                      beyond exact integer range — count only
+                      {t('dashboard.customers.directory.rangeCountOnly')}
                     </span>
                   )
                 ) : (
@@ -192,7 +193,9 @@ function DirectoryRows({ entries }: { entries: readonly CustomerDirectoryEntry[]
             </TD>
             <TD>
               {entry.overdueCount > 0 ? (
-                <Badge tone="warning">{entry.overdueCount} overdue</Badge>
+                <Badge tone="warning">
+                  {t('dashboard.customers.directory.overdueCount', { count: entry.overdueCount })}
+                </Badge>
               ) : (
                 <span className="text-ink-faint">—</span>
               )}
@@ -212,8 +215,10 @@ function DirectoryRows({ entries }: { entries: readonly CustomerDirectoryEntry[]
                 href={`/customers/${encodeURIComponent(entry.customerId)}`}
                 className="text-sm font-medium text-accent underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
-                View{' '}
-                <span className="sr-only">customer {entry.customerId}</span>
+                {t('dashboard.customers.directory.viewLink')}{' '}
+                <span className="sr-only">
+                  {t('dashboard.customers.directory.viewLinkSrOnly', { id: entry.customerId })}
+                </span>
               </Link>
             </TD>
           </TR>

@@ -14,7 +14,9 @@ import {
   defaultCollectionsClient,
   type CollectionsCaseClient,
 } from '@/lib/collections/case-ops';
-import { caseActionLadder, TRANSITION_LABELS } from '@/lib/collections/state-machine';
+import { caseActionLadder } from '@/lib/collections/state-machine';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import { CASE_STATUS_LABEL_KEYS } from './case-labels';
 
 /**
  * The TRANSITION flow (issue #135) — POST /v1/collections/cases/{caseId}/
@@ -26,6 +28,8 @@ import { caseActionLadder, TRANSITION_LABELS } from '@/lib/collections/state-mac
  * CASE_REASON_REQUIRED), and wire refusals surface verbatim with code +
  * requestId. No optimistic state: the panel is done only when the server
  * answers with the post-transition case view, which replaces the current one.
+ * Strings resolve through the shared i18n catalogs (issue #180); the status
+ * label union is bound via Record<CaseStatus, LocaleKey>.
  */
 
 export interface CaseTransitionPanelProps {
@@ -43,6 +47,7 @@ export function CaseTransitionPanel({
   writeClient = defaultCollectionsClient,
   onCaseReplaced,
 }: CaseTransitionPanelProps) {
+  const t = usePortalT();
   const ladder = caseActionLadder(caseView);
   const [target, setTarget] = useState<string>('');
   const [reason, setReason] = useState('');
@@ -64,16 +69,15 @@ export function CaseTransitionPanel({
       <Card aria-labelledby="case-transition-heading" data-testid="case-transition-panel">
         <CardHeader>
           <CardTitle id="case-transition-heading" className="text-base">
-            Lifecycle
+            {t('dashboard.collections.transition.title')}
           </CardTitle>
-          <CardDescription>
-            Legal edges only: open → in_progress, in_progress → resolved | closed_inactive.
-          </CardDescription>
+          <CardDescription>{t('dashboard.collections.transition.sealedDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-ink-soft" data-testid="case-transition-sealed">
-            This case is {TRANSITION_LABELS[caseView.status]} — a terminal state takes no
-            edges, so there is nothing to transition.
+            {t('dashboard.collections.transition.sealedNote', {
+              status: t(CASE_STATUS_LABEL_KEYS[caseView.status]),
+            })}
           </p>
         </CardContent>
       </Card>
@@ -83,7 +87,7 @@ export function CaseTransitionPanel({
   async function submit(): Promise<void> {
     if (effectiveTarget === '') return;
     if (reason.trim().length === 0) {
-      setLocalError('A reason is required — the transition is recorded in the case history.');
+      setLocalError(t('dashboard.collections.transition.reasonRequired'));
       return;
     }
     setLocalError(null);
@@ -94,7 +98,7 @@ export function CaseTransitionPanel({
     });
     if (result.ok) {
       setRefusalState(null);
-      setMovedTo(TRANSITION_LABELS[result.data.status]);
+      setMovedTo(t(CASE_STATUS_LABEL_KEYS[result.data.status]));
       setPhase('moved');
       onCaseReplaced(result.data, result.requestId);
       return;
@@ -111,12 +115,9 @@ export function CaseTransitionPanel({
     <Card aria-labelledby="case-transition-heading" data-testid="case-transition-panel">
       <CardHeader>
         <CardTitle id="case-transition-heading" className="text-base">
-          Lifecycle
+          {t('dashboard.collections.transition.title')}
         </CardTitle>
-        <CardDescription>
-          POST …/transitions — move along a legal edge. The decision, its reason and actor are
-          appended to the case history.
-        </CardDescription>
+        <CardDescription>{t('dashboard.collections.transition.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {phase === 'moved' && movedTo !== null && (
@@ -125,13 +126,13 @@ export function CaseTransitionPanel({
             className="rounded-md border border-ok-soft bg-ok-soft/40 px-4 py-3 text-sm text-ok"
             data-testid="case-transition-success"
           >
-            Case moved to {movedTo}.
+            {t('dashboard.collections.transition.success', { to: movedTo })}
           </p>
         )}
 
         {phase === 'refused' && refusalState !== null && (
           <ErrorState
-            title="Couldn't move the case"
+            title={t('dashboard.collections.transition.refusedTitle')}
             message={refusalState.message}
             code={refusalState.code}
             requestId={refusalState.requestId}
@@ -139,7 +140,7 @@ export function CaseTransitionPanel({
         )}
 
         <fieldset>
-          <legend className="text-sm font-medium text-ink">Move to</legend>
+          <legend className="text-sm font-medium text-ink">{t('dashboard.collections.transition.moveToLegend')}</legend>
           <div className="mt-1 space-y-1">
             {ladder.transitions.map((edge) => (
               <label key={edge.to} className="flex items-center gap-2 text-sm text-ink">
@@ -151,7 +152,7 @@ export function CaseTransitionPanel({
                   onChange={() => setTarget(edge.to)}
                   disabled={phase === 'submitting'}
                 />
-                {edge.label}
+                {t(CASE_STATUS_LABEL_KEYS[edge.to])}
               </label>
             ))}
           </div>
@@ -159,7 +160,7 @@ export function CaseTransitionPanel({
 
         <div>
           <label htmlFor="case-transition-reason" className="text-sm font-medium text-ink">
-            Transition reason (appended to the case history){' '}
+            {t('dashboard.collections.transition.reasonLabel')}{' '}
             <span aria-hidden="true">*</span>
           </label>
           <textarea
@@ -169,7 +170,7 @@ export function CaseTransitionPanel({
             rows={2}
             required
             disabled={phase === 'submitting'}
-            placeholder="Why the case is moving (recorded in the history log)"
+            placeholder={t('dashboard.collections.transition.reasonPlaceholder')}
             className="mt-1 w-full rounded-md border border-slate-300 bg-surface-raised px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
         </div>
@@ -182,8 +183,10 @@ export function CaseTransitionPanel({
 
         <Button onClick={() => void submit()} disabled={phase === 'submitting'}>
           {phase === 'submitting'
-            ? 'Moving…'
-            : `Move to ${TRANSITION_LABELS[effectiveTarget as CaseView['status']] ?? effectiveTarget}`}
+            ? t('dashboard.collections.transition.submitting')
+            : t('dashboard.collections.transition.submit', {
+                to: t(CASE_STATUS_LABEL_KEYS[effectiveTarget as CaseView['status']]),
+              })}
         </Button>
       </CardContent>
     </Card>

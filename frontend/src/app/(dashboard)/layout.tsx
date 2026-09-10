@@ -3,6 +3,11 @@ import type { ReactNode } from 'react';
 import { AppShell } from '@/components/shell/app-shell';
 import { SignInRequired } from '@/components/shell/sign-in-required';
 import { looksLikeSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import {
+  portalLocaleFromValue,
+  PORTAL_LOCALE_COOKIE,
+  PortalI18nProvider,
+} from '@/lib/portal-i18n';
 
 /**
  * Auth gate (server component). The dashboard renders only when the
@@ -16,15 +21,29 @@ import { looksLikeSessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session';
  * contract mounts session REVOCATION but not session ISSUANCE, so this gate
  * enforces cookie presence + shape only; validating the session against the
  * auth lane becomes possible once the login operation lands.
+ *
+ * Language (issue #180): the same locale cookie the portal reads drives the
+ * console — the layout mounts PortalI18nProvider with the locale read
+ * server-side, so server and client agree on first paint. No provider still
+ * renders English — en is the default, never a crash.
  */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
   const sessionPresent = looksLikeSessionToken(token);
+  const locale = portalLocaleFromValue(cookieStore.get(PORTAL_LOCALE_COOKIE)?.value);
 
   if (!sessionPresent) {
-    return <SignInRequired />;
+    return (
+      <PortalI18nProvider initialLocale={locale}>
+        <SignInRequired />
+      </PortalI18nProvider>
+    );
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <PortalI18nProvider initialLocale={locale}>
+      <AppShell>{children}</AppShell>
+    </PortalI18nProvider>
+  );
 }

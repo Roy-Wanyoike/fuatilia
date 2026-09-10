@@ -22,6 +22,7 @@ import type { FuatiliaClient, Page, Refusal } from '@/lib/api/client';
 import type { CaseView } from '@/lib/api/wire-types';
 import { formatTimestamp } from '@/lib/collections/display';
 import { CASE_SORTS, type CaseSort } from '@/lib/api/client';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { DerivedStatusBadge, CasePriorityBadge, CaseStatusBadge } from './case-badges';
 
 /**
@@ -30,7 +31,8 @@ import { DerivedStatusBadge, CasePriorityBadge, CaseStatusBadge } from './case-b
  * query state: skeletons while the first page is pending, the refusal's
  * code + requestId when the wire refuses, the empty read model when the org
  * has no cases, and honest "Load more" paging (no optimistic rows — the
- * page appends only what the server returned).
+ * page appends only what the server returned). Strings resolve through the
+ * shared i18n catalogs (issue #180); sort enums stay wire values.
  */
 
 const LIST_QUERY_ROOT = ['api', 'collections', 'cases', 'workspace'] as const;
@@ -65,6 +67,7 @@ function firstRefusal(pages: InfiniteData<PageResult> | undefined): Refusal | nu
 }
 
 export function CaseListView({ client = defaultClient }: CaseListViewProps) {
+  const t = usePortalT();
   const [sort, setSort] = useState<CaseSort>('caseNumber');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -100,17 +103,15 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
       <CardHeader className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <CardTitle id="case-list-heading" className="text-base">
-            Cases
+            {t('dashboard.collections.list.title')}
           </CardTitle>
           <CardDescription>
-            GET /v1/collections/cases — the org-scoped case read model,
-            cursor-paginated. Rows are sealed logs: work happens in the case
-            detail.
+            {t('dashboard.collections.list.description')}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="case-sort" className="text-xs text-ink-soft">
-            Sort
+            {t('dashboard.collections.list.sortLabel')}
           </label>
           <select
             id="case-sort"
@@ -125,7 +126,7 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
             ))}
           </select>
           <select
-            aria-label="Sort direction"
+            aria-label={t('dashboard.collections.list.sortDirectionLabel')}
             value={order}
             onChange={(event) => setOrder(event.target.value as 'asc' | 'desc')}
             className="rounded-md border border-slate-300 bg-surface-raised px-2 py-1 text-xs text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -134,7 +135,7 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
             <option value="desc">desc</option>
           </select>
           <Button variant="secondary" size="sm" onClick={refresh} disabled={casesQuery.isFetching}>
-            Refresh
+            {t('dashboard.collections.list.refresh')}
           </Button>
         </div>
       </CardHeader>
@@ -142,7 +143,7 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
         {refusal !== null && (
           <div className="mb-3">
             <ErrorState
-              title="Couldn't load cases"
+              title={t('dashboard.collections.list.refusedTitle')}
               message={refusalMessage(refusal)}
               code={describeRefusalCode(refusal)}
               requestId={refusalRequestId(refusal)}
@@ -161,21 +162,21 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
           <>
             {flattened.rows.length === 0 ? (
               <EmptyState
-                title="No collections cases yet"
-                description="The /v1/collections/cases read model returned an empty first page for your org."
-                hint="Open a case below over one or more receivables to start tracking collections."
+                title={t('dashboard.collections.list.emptyTitle')}
+                description={t('dashboard.collections.list.emptyDescription')}
+                hint={t('dashboard.collections.list.emptyHint')}
               />
             ) : (
               <>
                 <Table>
                   <THead>
                     <TR>
-                      <TH scope="col">Case</TH>
-                      <TH scope="col">Priority</TH>
-                      <TH scope="col">Status</TH>
-                      <TH scope="col">Derived</TH>
-                      <TH scope="col">Actions</TH>
-                      <TH scope="col">Opened</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.case')}</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.priority')}</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.status')}</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.derived')}</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.actions')}</TH>
+                      <TH scope="col">{t('dashboard.collections.list.col.opened')}</TH>
                     </TR>
                   </THead>
                   <TBody>
@@ -209,8 +210,11 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-ink-soft" data-testid="case-list-total">
                     {flattened.total !== null
-                      ? `${flattened.rows.length} of ${flattened.total} case(s) shown`
-                      : `${flattened.rows.length} case(s) shown`}
+                      ? t('dashboard.collections.list.shownOfTotal', {
+                          shown: flattened.rows.length,
+                          total: flattened.total,
+                        })
+                      : t('dashboard.collections.list.shownCount', { shown: flattened.rows.length })}
                   </p>
                   {hasMore && (
                     <Button
@@ -219,7 +223,9 @@ export function CaseListView({ client = defaultClient }: CaseListViewProps) {
                       onClick={() => void casesQuery.fetchNextPage()}
                       disabled={isLoadingMore}
                     >
-                      {isLoadingMore ? 'Loading…' : 'Load more'}
+                      {isLoadingMore
+                        ? t('dashboard.collections.list.loading')
+                        : t('dashboard.collections.list.loadMore')}
                     </Button>
                   )}
                 </div>

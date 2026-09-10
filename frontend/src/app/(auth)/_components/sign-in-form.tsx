@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { safeNextPath } from '@/lib/auth/gate';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { AccessRefused } from './access-refused';
 
 /**
@@ -15,7 +16,8 @@ import { AccessRefused } from './access-refused';
  * validates it against the live API and sets the httpOnly SameSite=Strict
  * cookie on success. The credential is NEVER placed in a URL, NEVER written
  * to localStorage/sessionStorage, and after validation it lives only in the
- * httpOnly cookie — invisible to this component's JS.
+ * httpOnly cookie — invisible to this component's JS. All collector-facing
+ * strings resolve through the shared i18n catalogs (issue #180).
  */
 
 interface SignInRefusal {
@@ -28,6 +30,7 @@ type SignInPhase = 'idle' | 'submitting' | 'refused' | 'unreachable';
 
 export function SignInForm({ nextHint }: { nextHint?: string | null }) {
   const router = useRouter();
+  const t = usePortalT();
   // Open-redirect-safe: only a same-origin relative path survives the
   // sanitizer (lib/auth/gate.ts); the hint never carries a credential.
   const next = safeNextPath(nextHint);
@@ -40,7 +43,7 @@ export function SignInForm({ nextHint }: { nextHint?: string | null }) {
     event.preventDefault();
     const trimmed = sessionToken.trim();
     if (trimmed.length === 0) {
-      setLocalError('Paste the session credential your administrator issued.');
+      setLocalError(t('auth.signIn.emptyCredentialError'));
       return;
     }
     setLocalError(null);
@@ -80,15 +83,12 @@ export function SignInForm({ nextHint }: { nextHint?: string | null }) {
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
       <main id="main-content" className="w-full max-w-md">
         <div className="rounded-lg border border-slate-200 bg-surface-raised p-6 shadow-sm sm:p-8">
-          <h1 className="text-lg font-semibold text-ink">Sign in to Fuatilia</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            The collections console for your team. Paste the session credential your Fuatilia
-            administrator issued to begin.
-          </p>
+          <h1 className="text-lg font-semibold text-ink">{t('auth.signIn.title')}</h1>
+          <p className="mt-2 text-sm text-ink-soft">{t('auth.signIn.intro')}</p>
 
           <form className="mt-5 flex flex-col gap-3" onSubmit={(event) => void handleSubmit(event)}>
             <label htmlFor="session-credential" className="text-sm font-medium text-ink">
-              Session credential
+              {t('auth.signIn.credentialLabel')}
             </label>
             <input
               id="session-credential"
@@ -105,9 +105,7 @@ export function SignInForm({ nextHint }: { nextHint?: string | null }) {
               disabled={phase === 'submitting'}
             />
             <p id="session-credential-help" className="text-xs text-ink-soft">
-              The credential is validated against the live API once, then held in an HTTP-only,
-              SameSite=Strict cookie and relayed to the API server-side. It is never placed in a
-              URL, never stored in your browser, and never readable by scripts on this page.
+              {t('auth.signIn.credentialHelp')}
             </p>
             {localError !== null && (
               <p role="alert" className="text-sm text-danger" data-testid="sign-in-local-error">
@@ -115,15 +113,15 @@ export function SignInForm({ nextHint }: { nextHint?: string | null }) {
               </p>
             )}
             <Button type="submit" disabled={phase === 'submitting'}>
-              {phase === 'submitting' ? 'Validating…' : 'Open the console'}
+              {phase === 'submitting' ? t('auth.signIn.submitting') : t('auth.signIn.submit')}
             </Button>
           </form>
 
           {phase === 'refused' && refusal !== null && (
             <div className="mt-5">
               <AccessRefused
-                title="This session credential was not accepted"
-                description="Check the credential and try again, or ask your Fuatilia administrator for a fresh session."
+                title={t('auth.signIn.refusedTitle')}
+                description={t('auth.signIn.refusedDescription')}
                 code={refusal.code}
                 requestId={refusal.requestId}
                 message={refusal.message}
@@ -136,20 +134,14 @@ export function SignInForm({ nextHint }: { nextHint?: string | null }) {
               className="mt-5 rounded-md border border-danger-soft bg-danger-soft/40 px-4 py-4"
               data-testid="sign-in-unreachable"
             >
-              <p className="text-sm font-medium text-danger">The API could not be reached</p>
-              <p className="mt-1 text-sm text-ink-soft">
-                The credential could not be validated, so nothing was unlocked. Try again in a
-                moment — no access is granted on an unverifiable credential.
-              </p>
+              <p className="text-sm font-medium text-danger">{t('auth.signIn.unreachableTitle')}</p>
+              <p className="mt-1 text-sm text-ink-soft">{t('auth.signIn.unreachableBody')}</p>
             </div>
           )}
 
           <p className="mt-6 rounded-md border border-dashed border-warn-soft bg-warn-soft/40 px-3 py-2 text-xs text-ink-soft">
-            <strong className="font-semibold text-ink">How sign-in works today:</strong> the
-            mounted /v1 contract issues sessions through the auth admin lane, not through a
-            username/password form — so this screen accepts the session credential itself and
-            proves it against a live protected operation before the console opens. Nothing here is
-            simulated.
+            <strong className="font-semibold text-ink">{t('auth.signIn.seamNoteTitle')}</strong>{' '}
+            {t('auth.signIn.seamNoteBody')}
           </p>
         </div>
       </main>

@@ -5,11 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import type { CaseView } from '@/lib/api/wire-types';
 import { formatTimestamp } from '@/lib/collections/display';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import { isCaseLive } from '@/lib/collections/state-machine';
 import {
-  ACTION_TYPE_LABELS,
-  isCaseLive,
-  TRANSITION_LABELS,
-} from '@/lib/collections/state-machine';
+  CASE_ACTION_TYPE_LABEL_KEYS,
+  CASE_STATUS_LABEL_KEYS,
+} from './case-labels';
 
 /**
  * The SEALED LOG (issue #135) — the case's append-only records as the wire
@@ -17,7 +18,8 @@ import {
  * lifecycle transition, every priority bump. Read-only by definition — the
  * only way a row appears here is the server appending it. Terminal cases
  * carry an explicit seal note (the wire refuses further writes with 409
- * CASE_CLOSED).
+ * CASE_CLOSED). Strings resolve through the shared i18n catalogs
+ * (issue #180); action sources stay wire values.
  */
 
 export interface CaseActionLogProps {
@@ -25,49 +27,49 @@ export interface CaseActionLogProps {
 }
 
 export function CaseActionLog({ caseView }: CaseActionLogProps) {
+  const t = usePortalT();
   return (
     <Card aria-labelledby="case-log-heading" data-testid="case-action-log">
       <CardHeader>
         <CardTitle id="case-log-heading" className="text-base">
-          The sealed log
+          {t('dashboard.collections.log.title')}
         </CardTitle>
-        <CardDescription>
-          Append-only, as the wire returned it — actions, transitions, priority changes.
-        </CardDescription>
+        <CardDescription>{t('dashboard.collections.log.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!isCaseLive(caseView.status) && (
           <p className="text-xs text-ink-soft" data-testid="case-log-sealed-note">
-            This case is {TRANSITION_LABELS[caseView.status]} — its log is sealed and the wire
-            refuses further writes with 409 CASE_CLOSED.
+            {t('dashboard.collections.log.sealedNote', {
+              status: t(CASE_STATUS_LABEL_KEYS[caseView.status]),
+            })}
           </p>
         )}
 
         <section aria-labelledby="case-log-actions-heading">
           <h3 id="case-log-actions-heading" className="text-sm font-medium text-ink">
-            Actions ({caseView.actions.length})
+            {t('dashboard.collections.log.actionsTitle', { count: caseView.actions.length })}
           </h3>
           {caseView.actions.length === 0 ? (
             <p className="mt-1 text-xs text-ink-soft" data-testid="case-log-actions-empty">
-              No actions recorded yet.
+              {t('dashboard.collections.log.actionsEmpty')}
             </p>
           ) : (
             <div className="mt-1">
               <Table>
                 <THead>
                   <TR>
-                    <TH scope="col">Type</TH>
-                    <TH scope="col">Scheduled</TH>
-                    <TH scope="col">Source</TH>
-                    <TH scope="col">Consent</TH>
-                    <TH scope="col">Outcome</TH>
-                    <TH scope="col">State</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.type')}</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.scheduled')}</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.source')}</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.consent')}</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.outcome')}</TH>
+                    <TH scope="col">{t('dashboard.collections.log.col.state')}</TH>
                   </TR>
                 </THead>
                 <TBody>
                   {caseView.actions.map((action) => (
                     <TR key={action.id} data-testid="case-log-action-row">
-                      <TD>{ACTION_TYPE_LABELS[action.type]}</TD>
+                      <TD>{t(CASE_ACTION_TYPE_LABEL_KEYS[action.type])}</TD>
                       <TD className="whitespace-nowrap text-xs">
                         {formatTimestamp(action.scheduledFor)}
                       </TD>
@@ -79,11 +81,13 @@ export function CaseActionLog({ caseView }: CaseActionLogProps) {
                       <TD>
                         {action.completedAt === null ? (
                           <Badge tone="warning" data-testid="case-log-action-open">
-                            awaiting completion
+                            {t('dashboard.collections.log.awaitingCompletion')}
                           </Badge>
                         ) : (
                           <Badge tone="success" data-testid="case-log-action-completed">
-                            completed {formatTimestamp(action.completedAt)}
+                            {t('dashboard.collections.log.completedAt', {
+                              at: formatTimestamp(action.completedAt),
+                            })}
                           </Badge>
                         )}
                       </TD>
@@ -97,11 +101,11 @@ export function CaseActionLog({ caseView }: CaseActionLogProps) {
 
         <section aria-labelledby="case-log-history-heading">
           <h3 id="case-log-history-heading" className="text-sm font-medium text-ink">
-            Lifecycle history ({caseView.history.length})
+            {t('dashboard.collections.log.historyTitle', { count: caseView.history.length })}
           </h3>
           {caseView.history.length === 0 ? (
             <p className="mt-1 text-xs text-ink-soft" data-testid="case-log-history-empty">
-              No transitions recorded yet.
+              {t('dashboard.collections.log.historyEmpty')}
             </p>
           ) : (
             <ul className="mt-1 space-y-1">
@@ -112,11 +116,19 @@ export function CaseActionLog({ caseView }: CaseActionLogProps) {
                   data-testid="case-log-history-row"
                 >
                   <span className="font-medium text-ink">
-                    {TRANSITION_LABELS[entry.from]} → {TRANSITION_LABELS[entry.to]}
+                    {t('dashboard.collections.log.historyFromTo', {
+                      from: t(CASE_STATUS_LABEL_KEYS[entry.from]),
+                      to: t(CASE_STATUS_LABEL_KEYS[entry.to]),
+                    })}
                   </span>{' '}
-                  <span className="text-ink-soft">— “{entry.reason}”</span>{' '}
                   <span className="text-ink-soft">
-                    at {formatTimestamp(entry.at)} by <span className="font-mono">{entry.actorId}</span>
+                    {t('dashboard.collections.log.historyReason', { reason: entry.reason })}
+                  </span>{' '}
+                  <span className="text-ink-soft">
+                    {t('dashboard.collections.log.historyMeta', {
+                      at: formatTimestamp(entry.at),
+                      actor: entry.actorId,
+                    })}
                   </span>
                 </li>
               ))}
@@ -126,11 +138,13 @@ export function CaseActionLog({ caseView }: CaseActionLogProps) {
 
         <section aria-labelledby="case-log-priority-heading">
           <h3 id="case-log-priority-heading" className="text-sm font-medium text-ink">
-            Priority changes ({caseView.priorityChanges.length})
+            {t('dashboard.collections.log.priorityTitle', {
+              count: caseView.priorityChanges.length,
+            })}
           </h3>
           {caseView.priorityChanges.length === 0 ? (
             <p className="mt-1 text-xs text-ink-soft" data-testid="case-log-priority-empty">
-              No escalations recorded yet.
+              {t('dashboard.collections.log.priorityEmpty')}
             </p>
           ) : (
             <ul className="mt-1 space-y-1">
@@ -143,9 +157,14 @@ export function CaseActionLog({ caseView }: CaseActionLogProps) {
                   <span className="font-medium text-ink">
                     {entry.from} → {entry.to}
                   </span>{' '}
-                  <span className="text-ink-soft">— “{entry.reason}”</span>{' '}
                   <span className="text-ink-soft">
-                    at {formatTimestamp(entry.at)} by <span className="font-mono">{entry.actorId}</span>
+                    {t('dashboard.collections.log.historyReason', { reason: entry.reason })}
+                  </span>{' '}
+                  <span className="text-ink-soft">
+                    {t('dashboard.collections.log.historyMeta', {
+                      at: formatTimestamp(entry.at),
+                      actor: entry.actorId,
+                    })}
                   </span>
                 </li>
               ))}

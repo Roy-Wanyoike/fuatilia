@@ -86,6 +86,226 @@ describe('missing-key refusal (tsc level — the documented pattern)', () => {
     expect(typeof translate(en, 'common.returnToGate')).toBe('string');
     expect(typeof translate(en, 'language.kiswahili')).toBe('string');
   });
+
+  it('key derivation reaches every #180 leaf — dashboard + auth samples resolve', () => {
+    // (dashboard) — one sample per section, proving the union grew with the
+    // catalog and every new view is addressable at tsc level.
+    expect(typeof translate(en, 'dashboard.overview.title')).toBe('string');
+    expect(typeof translate(en, 'dashboard.payments.col.receipt')).toBe('string');
+    expect(typeof translate(en, 'dashboard.collections.statusLabels.in_progress')).toBe('string');
+    expect(typeof translate(en, 'dashboard.collections.open.toggle')).toBe('string');
+    expect(
+      typeof translate(en, 'dashboard.collections.log.sealedNote', { status: 'Resolved' }),
+    ).toBe('string');
+    expect(typeof translate(en, 'dashboard.customers.directory.col.lastActivity')).toBe('string');
+    expect(typeof translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('string');
+    expect(typeof translate(en, 'dashboard.reconciliation.capabilities')).toBe('string');
+    expect(typeof translate(en, 'dashboard.settings.scope')).toBe('string');
+    // (auth) — the credential surfaces.
+    expect(typeof translate(en, 'auth.meta.title')).toBe('string');
+    expect(typeof translate(en, 'auth.signIn.credentialLabel')).toBe('string');
+    expect(typeof translate(en, 'auth.signOut.submit')).toBe('string');
+    expect(typeof translate(en, 'auth.signInRequired.title')).toBe('string');
+  });
+
+  it('a key absent from the #180 sections is a TYPE error too — the pattern extends', () => {
+    // Same load-bearing contract as above, now pinning the dashboard/auth
+    // sections: if key derivation ever stops rejecting unknown keys there,
+    // `npm run typecheck` fails on these lines.
+    expect(() =>
+      // @ts-expect-error — unknown dashboard keys must be a tsc error too
+      translate(en, 'dashboard.collections.doesNotExist' as string),
+    ).toThrow(MissingPortalStringError);
+
+    expect(() =>
+      // @ts-expect-error — a typo'd auth key must be a tsc error too
+      translate(en, 'auth.singIn.title' as string),
+    ).toThrow(MissingPortalStringError);
+
+    expect(() =>
+      // @ts-expect-error — a retired #180 key must be refused like a portal one
+      translate(en, 'dashboard.overview.cardTitle' as string),
+    ).toThrow(MissingPortalStringError);
+  });
+});
+
+describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () => {
+  // The (dashboard)/(auth) components previously rendered these literals
+  // inline; existing component tests pin them. Adoption moved the strings
+  // into the catalog — this suite makes the byte-identity load-bearing at
+  // the catalog level too, so a casual copy edit shows up here first.
+  it('dashboard strings that component tests pin resolve byte-identically', () => {
+    expect(translate(en, 'dashboard.overview.title')).toBe('Overview');
+    expect(translate(en, 'dashboard.overview.emptyTitle')).toBe('Nothing here yet');
+    expect(translate(en, 'dashboard.payments.refusedTitle')).toBe('Payments are unavailable');
+    expect(translate(en, 'dashboard.payments.pageOf', { page: 1, pages: 3 })).toBe(
+      'page 1 of ≤ 3',
+    );
+    expect(translate(en, 'dashboard.collections.list.emptyTitle')).toBe(
+      'No collections cases yet',
+    );
+    expect(translate(en, 'dashboard.collections.list.shownOfTotal', { shown: 3, total: 3 })).toBe(
+      '3 of 3 case(s) shown',
+    );
+    expect(translate(en, 'dashboard.collections.statusLabels.in_progress')).toBe('In progress');
+    expect(translate(en, 'dashboard.collections.actionTypeLabels.call')).toBe('Call');
+    expect(translate(en, 'dashboard.collections.open.success', { caseNumber: 'CASE-000007' })).toBe(
+      'Case CASE-000007 opened.',
+    );
+    expect(translate(en, 'dashboard.collections.detail.heading', { caseNumber: 'CASE-000007' })).toBe(
+      'Case CASE-000007',
+    );
+    expect(translate(en, 'dashboard.collections.transition.submit', { to: 'In progress' })).toBe(
+      'Move to In progress',
+    );
+    expect(translate(en, 'dashboard.collections.escalation.submit', { to: 'urgent' })).toBe(
+      'Escalate to urgent',
+    );
+    expect(translate(en, 'dashboard.collections.summary.overdueSuffix')).toBe('· overdue');
+    expect(translate(en, 'dashboard.collections.record.title')).toBe('Record an action');
+    expect(
+      translate(en, 'dashboard.collections.record.success', {
+        type: 'Call',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Call recorded — scheduled for 2026-09-02 12:00.');
+    expect(translate(en, 'dashboard.collections.record.scheduledLabel')).toBe(
+      'Scheduled for (Nairobi time)',
+    );
+    expect(translate(en, 'dashboard.collections.complete.title')).toBe('Complete an action');
+    expect(
+      translate(en, 'dashboard.collections.complete.optionLabel', {
+        type: 'Call',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Call — scheduled 2026-09-02 12:00');
+    expect(translate(en, 'dashboard.customers.directory.derivedCount', { count: 1 })).toBe(
+      '· 1 derived',
+    );
+    expect(translate(en, 'dashboard.customers.directory.overdueCount', { count: 1 })).toBe(
+      '1 overdue',
+    );
+    expect(translate(en, 'dashboard.customers.directory.mixedCurrencyCountOnly')).toBe(
+      'mixed currencies — count only (R10)',
+    );
+    expect(
+      translate(en, 'dashboard.customers.c360.openCaseCountSuffix', { total: 3 }),
+    ).toBe('open (3 total incl. resolved/closed)');
+    expect(translate(en, 'dashboard.customers.c360.stats.heldOnAccount')).toBe('held on account');
+    expect(
+      translate(en, 'dashboard.customers.c360.paymentRow.appliedTo', { id: 'rcv-1' }),
+    ).toBe('applied to receivable rcv-1');
+    expect(translate(en, 'dashboard.customers.c360.overdueBadge')).toBe('overdue');
+    expect(translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('due now');
+    // Command Center — the a11y suite pins the h1, every card title and the
+    // refresh control; the component tests pin the empty-state titles.
+    expect(translate(en, 'dashboard.commandCenter.title')).toBe('Collections Command Center');
+    expect(translate(en, 'dashboard.commandCenter.refresh')).toBe('Refresh');
+    expect(translate(en, 'dashboard.commandCenter.derivationLabel')).toBe('derivation:');
+    expect(translate(en, 'dashboard.commandCenter.cards.expectedToday.cardTitle')).toBe(
+      'Expected collections today',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.atRisk.cardTitle')).toBe('At-risk');
+    expect(translate(en, 'dashboard.commandCenter.cards.opportunities.cardTitle')).toBe(
+      'High-value opportunities',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.expectedToday.subsetEmptyTitle')).toBe(
+      'Nothing falls due today',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.overdue.subsetEmptyTitle')).toBe(
+      'Nothing is overdue',
+    );
+    expect(
+      translate(en, 'dashboard.commandCenter.cards.overdue.bucketLabel', {
+        bucket: '61-90',
+        count: 2,
+      }),
+    ).toBe('61-90: 2');
+    expect(
+      translate(en, 'dashboard.commandCenter.cards.opportunities.footerTotal', {
+        count: 5,
+        book: 'KES 75,000.00',
+      }),
+    ).toBe('Top 5 by outstanding balance — total book KES 75,000.00');
+    // Dashboard shell — the a11y suite pins the nav landmark, skip link,
+    // health states and per-item labels.
+    expect(translate(en, 'dashboard.shell.skipToContent')).toBe('Skip to content');
+    expect(translate(en, 'dashboard.shell.navAriaLabel')).toBe('Primary');
+    expect(translate(en, 'dashboard.shell.planned')).toBe('planned');
+    expect(translate(en, 'dashboard.shell.nav.overview.label')).toBe('Overview');
+    expect(translate(en, 'dashboard.shell.nav.settings.description')).toBe(
+      'Team, roles, API keys',
+    );
+    expect(translate(en, 'dashboard.shell.health.reachable')).toBe('reachable');
+  });
+
+  it('auth strings that component tests pin resolve byte-identically', () => {
+    expect(translate(en, 'auth.meta.title')).toBe('Fuatilia — Sign in');
+    expect(translate(en, 'auth.signIn.title')).toBe('Sign in to Fuatilia');
+    expect(translate(en, 'auth.signIn.credentialLabel')).toBe('Session credential');
+    expect(translate(en, 'auth.signIn.submit')).toBe('Open the console');
+    expect(translate(en, 'auth.signIn.submitting')).toBe('Validating…');
+    expect(translate(en, 'auth.signIn.emptyCredentialError')).toBe(
+      'Paste the session credential your administrator issued.',
+    );
+    expect(translate(en, 'auth.signIn.refusedTitle')).toBe(
+      'This session credential was not accepted',
+    );
+    expect(translate(en, 'auth.signIn.unreachableTitle')).toBe('The API could not be reached');
+    expect(translate(en, 'auth.signOut.submit')).toBe('Sign out');
+    expect(translate(en, 'auth.signOut.signInAgain')).toBe('Sign in again');
+    // The sign-in gate screen — dashboard-refusal.test.tsx pins the heading,
+    // the credential disclosure and the seam label; a11y pins the h1 too.
+    expect(translate(en, 'auth.signInRequired.title')).toBe('Sign in to Fuatilia');
+    expect(translate(en, 'auth.signInRequired.bodyLeadIn')).toBe(
+      'This console reads its bearer credential from an HTTP-only session cookie (',
+    );
+    expect(translate(en, 'auth.signInRequired.bodyRelay')).toBe('), which the API relays as ');
+    expect(translate(en, 'auth.signInRequired.bodyRest')).toBe(
+      '. The cookie is never readable from browser JavaScript and is never stored in localStorage.',
+    );
+    expect(translate(en, 'auth.signInRequired.seamStatusLabel')).toBe('Seam status:');
+    expect(translate(en, 'auth.signInRequired.seamNote')).toBe(
+      "the mounted /v1 contract (api/openapi/fuatilia.v1.yaml) exposes session revocation but not session issuance — the login operation lands with the backend auth lane. Until then the gate enforces the cookie contract's presence check only, and no dashboard data can be fabricated in its place.",
+    );
+    expect(translate(en, 'auth.signInRequired.devNote')).toBe(
+      'In development, seed the cookie with a real auth-lane session id to exercise the read path; see frontend/README.md "Auth at the seam".',
+    );
+  });
+
+  it('the shared refusal-envelope labels match the (auth) AccessRefused rendering', () => {
+    // (auth)/access-refused.tsx adopts the #149 shared `common` labels —
+    // they render byte-identically ('code:' / 'requestId:').
+    expect(translate(en, 'common.codeLabel')).toBe('code:');
+    expect(translate(en, 'common.requestIdLabel')).toBe('requestId:');
+  });
+
+  it('sw carries every #180 string too — sample translations resolve', () => {
+    expect(translate(sw, 'dashboard.overview.title')).toBe('Muhtasari');
+    expect(translate(sw, 'dashboard.payments.title')).toBe('Malipo');
+    expect(translate(sw, 'dashboard.collections.statusLabels.in_progress')).toBe('Inaendelea');
+    expect(translate(sw, 'dashboard.collections.open.toggle')).toBe('Fungua kesa…');
+    expect(translate(sw, 'dashboard.collections.record.submit')).toBe('Rekodi hatua');
+    expect(
+      translate(sw, 'dashboard.collections.complete.optionLabel', {
+        type: 'Simu',
+        when: '2026-09-02 12:00',
+      }),
+    ).toBe('Simu — imepangwa 2026-09-02 12:00');
+    expect(translate(sw, 'dashboard.commandCenter.title')).toBe('Kituo cha Amri cha Makusanyi');
+    expect(translate(sw, 'dashboard.commandCenter.cards.overdue.cardTitle')).toBe('Zilizochelewa');
+    expect(
+      translate(sw, 'dashboard.commandCenter.cards.overdue.bucketLabel', {
+        bucket: '61-90',
+        count: 2,
+      }),
+    ).toBe('61-90: 2');
+    expect(translate(sw, 'dashboard.customers.directory.title')).toBe('Wateja');
+    expect(translate(sw, 'auth.signIn.title')).toBe('Ingia kwenye Fuatilia');
+    expect(translate(sw, 'auth.signOut.submit')).toBe('Toka');
+    expect(translate(sw, 'auth.signInRequired.title')).toBe('Ingia kwenye Fuatilia');
+    expect(translate(sw, 'auth.signInRequired.seamStatusLabel')).toBe('Hali ya ngazi:');
+  });
 });
 
 describe('interpolation', () => {

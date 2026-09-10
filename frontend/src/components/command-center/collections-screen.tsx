@@ -20,6 +20,7 @@ import {
   deriveCommandCenter,
   type CommandCenterSummary,
 } from '@/lib/derivation/command-center';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { formatMoney } from '@/lib/money';
 
 /**
@@ -38,7 +39,8 @@ import { formatMoney } from '@/lib/money';
  * When the backend is unreachable every card renders its REAL error state
  * (tagged refusal + requestId) — fabricated business rows are impossible by
  * construction because this component holds no data other than query
- * results.
+ * results. Strings resolve through the shared i18n catalogs (issue #180);
+ * wire enum badges stay wire values.
  */
 
 export interface CollectionsScreenProps {
@@ -57,6 +59,7 @@ export function CollectionsScreen({
   client = defaultClient,
   clock = systemClock,
 }: CollectionsScreenProps) {
+  const t = usePortalT();
   const receivablesQuery = useQuery({
     queryKey: RECEIVABLES_KEY,
     queryFn: () => listAllReceivables(client),
@@ -104,16 +107,16 @@ export function CollectionsScreen({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 id="command-center-heading" className="text-lg font-semibold text-ink">
-            Collections Command Center
+            {t('dashboard.commandCenter.title')}
           </h1>
           <p className="mt-0.5 text-sm text-ink-soft">
-            What should my collections team do right now?
+            {t('dashboard.commandCenter.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
           {summary !== null && (
             <span className="text-xs text-ink-faint" data-testid="command-center-asof">
-              derived for {summary.todayKey} (Africa/Nairobi)
+              {t('dashboard.commandCenter.asOf', { day: summary.todayKey })}
             </span>
           )}
           <Button
@@ -122,16 +125,14 @@ export function CollectionsScreen({
             onClick={retryAll}
             disabled={receivablesQuery.isFetching || paymentsQuery.isFetching || casesQuery.isFetching}
           >
-            Refresh
+            {t('dashboard.commandCenter.refresh')}
           </Button>
         </div>
       </div>
 
       {truncated && (
         <p className="mt-2 rounded-md border border-warn-soft bg-warn-soft/40 px-3 py-2 text-xs text-ink-soft" role="status">
-          Large dataset: the read path stopped at the payload-conscious page cap, so totals cover
-          the fetched rows only. Server-side aggregation is roadmap (README &quot;Card
-          derivations&quot;).
+          {t('dashboard.commandCenter.truncatedNote')}
         </p>
       )}
 
@@ -260,6 +261,7 @@ function MetricCountTotal({
   totalLabel: string;
   omitTotal?: boolean;
 }) {
+  const t = usePortalT();
   return (
     <div>
       <p className="text-3xl font-semibold tabular-nums text-ink" data-testid="metric-count">
@@ -269,9 +271,9 @@ function MetricCountTotal({
         <p className="mt-1 text-sm text-ink-soft" data-testid="metric-total">
           {total === null ? (
             mixedCurrency ? (
-              'mixed currencies — count only (R10: no cross-currency totals)'
+              t('dashboard.commandCenter.metric.mixedCurrencies')
             ) : (
-              'total beyond exact integer range — count only (money never rounds)'
+              t('dashboard.commandCenter.metric.rangeOverflow')
             )
           ) : (
             <>
@@ -296,17 +298,20 @@ function bucketTone(bucket: '0-30' | '31-60' | '61-90' | '90+'): 'neutral' | 'wa
 // ---------------------------------------------------------------------------
 
 function ExpectedTodayCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'Expected collections today is unavailable',
+    title: t('dashboard.commandCenter.cards.expectedToday.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No receivables on this deployment yet',
-    sourceEmptyDescription:
-      'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
-    subsetEmptyTitle: 'Nothing falls due today',
-    subsetEmptyDescription:
-      'No outstanding receivable has a due date of today (Africa/Nairobi).',
-    subsetEmptyHint: 'Receivables are fetched sorted by due date ascending.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.expectedToday.sourceEmptyTitle'),
+    sourceEmptyDescription: t(
+      'dashboard.commandCenter.cards.expectedToday.sourceEmptyDescription',
+    ),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.expectedToday.subsetEmptyTitle'),
+    subsetEmptyDescription: t(
+      'dashboard.commandCenter.cards.expectedToday.subsetEmptyDescription',
+    ),
+    subsetEmptyHint: t('dashboard.commandCenter.cards.expectedToday.subsetEmptyHint'),
     subsetIsEmpty: (s) => s.expectedToday.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -315,16 +320,16 @@ function ExpectedTodayCard({ query, summary, onRetry }: CardProps<ReceivableView
           count={s.expectedToday.count}
           total={s.expectedToday.total}
           mixedCurrency={s.expectedToday.mixedCurrency}
-          totalLabel="outstanding balance due today"
+          totalLabel={t('dashboard.commandCenter.cards.expectedToday.totalLabel')}
         />
       ),
     }),
   });
   return (
     <CommandCard
-      title="Expected collections today"
-      question="Which balances fall due today?"
-      derivation="GET /v1/receivables — balance of open|partially_paid rows with dueDate = today"
+      title={t('dashboard.commandCenter.cards.expectedToday.cardTitle')}
+      question={t('dashboard.commandCenter.cards.expectedToday.question')}
+      derivation={t('dashboard.commandCenter.cards.expectedToday.derivation')}
       state={state}
     />
   );
@@ -335,15 +340,15 @@ function ExpectedTodayCard({ query, summary, onRetry }: CardProps<ReceivableView
 // ---------------------------------------------------------------------------
 
 function OverdueCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'Overdue exposure is unavailable',
+    title: t('dashboard.commandCenter.cards.overdue.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No receivables on this deployment yet',
-    sourceEmptyDescription:
-      'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
-    subsetEmptyTitle: 'Nothing is overdue',
-    subsetEmptyDescription: 'No receivable carries the lane\'s overdue flag.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.overdue.sourceEmptyTitle'),
+    sourceEmptyDescription: t('dashboard.commandCenter.cards.overdue.sourceEmptyDescription'),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.overdue.subsetEmptyTitle'),
+    subsetEmptyDescription: t('dashboard.commandCenter.cards.overdue.subsetEmptyDescription'),
     subsetIsEmpty: (s) => s.overdue.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -353,12 +358,15 @@ function OverdueCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
             count={s.overdue.count}
             total={s.overdue.total}
             mixedCurrency={s.overdue.mixedCurrency}
-            totalLabel="overdue balance"
+            totalLabel={t('dashboard.commandCenter.cards.overdue.totalLabel')}
           />
           <div className="flex flex-wrap gap-1.5" data-testid="overdue-buckets">
             {(['0-30', '31-60', '61-90', '90+'] as const).map((bucket) => (
               <Badge key={bucket} tone={bucketTone(bucket)}>
-                {bucket}: {s.overdue.buckets[bucket]}
+                {t('dashboard.commandCenter.cards.overdue.bucketLabel', {
+                  bucket,
+                  count: s.overdue.buckets[bucket],
+                })}
               </Badge>
             ))}
           </div>
@@ -368,9 +376,9 @@ function OverdueCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
   });
   return (
     <CommandCard
-      title="Overdue"
-      question="How much money is past due, and how deep?"
-      derivation="GET /v1/receivables — overdue flag + aging buckets of open|partially_paid rows"
+      title={t('dashboard.commandCenter.cards.overdue.cardTitle')}
+      question={t('dashboard.commandCenter.cards.overdue.question')}
+      derivation={t('dashboard.commandCenter.cards.overdue.derivation')}
       state={state}
     />
   );
@@ -381,17 +389,16 @@ function OverdueCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
 // ---------------------------------------------------------------------------
 
 function AtRiskCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'At-risk exposure is unavailable',
+    title: t('dashboard.commandCenter.cards.atRisk.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No receivables on this deployment yet',
-    sourceEmptyDescription:
-      'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
-    subsetEmptyTitle: 'Nothing is deep-aged',
-    subsetEmptyDescription:
-      'No receivable sits in the 61–90 or 90+ aging buckets — the at-risk definition for v1.',
-    subsetEmptyHint: 'Risk-scoring engine (SPEC §25) refines this definition on the roadmap.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.atRisk.sourceEmptyTitle'),
+    sourceEmptyDescription: t('dashboard.commandCenter.cards.atRisk.sourceEmptyDescription'),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.atRisk.subsetEmptyTitle'),
+    subsetEmptyDescription: t('dashboard.commandCenter.cards.atRisk.subsetEmptyDescription'),
+    subsetEmptyHint: t('dashboard.commandCenter.cards.atRisk.subsetEmptyHint'),
     subsetIsEmpty: (s) => s.atRisk.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -400,16 +407,16 @@ function AtRiskCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
           count={s.atRisk.count}
           total={s.atRisk.total}
           mixedCurrency={s.atRisk.mixedCurrency}
-          totalLabel="aged 61–90 / 90+ days"
+          totalLabel={t('dashboard.commandCenter.cards.atRisk.totalLabel')}
         />
       ),
     }),
   });
   return (
     <CommandCard
-      title="At-risk"
-      question="Which balances are deep in the aging ladder?"
-      derivation="GET /v1/receivables — aging bucket ∈ {61-90, 90+} of open|partially_paid rows"
+      title={t('dashboard.commandCenter.cards.atRisk.cardTitle')}
+      question={t('dashboard.commandCenter.cards.atRisk.question')}
+      derivation={t('dashboard.commandCenter.cards.atRisk.derivation')}
       state={state}
     />
   );
@@ -420,17 +427,20 @@ function AtRiskCard({ query, summary, onRetry }: CardProps<ReceivableView>) {
 // ---------------------------------------------------------------------------
 
 function PromisesDueCard({ query, summary, onRetry }: CardProps<CaseView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'Promise tracking is unavailable',
+    title: t('dashboard.commandCenter.cards.promisesDue.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No collections cases yet',
-    sourceEmptyDescription:
-      'GET /v1/collections/cases returned an empty first page — open a case to start tracking.',
-    subsetEmptyTitle: 'No live promised cases',
-    subsetEmptyDescription:
-      'No live case (open / in_progress) currently derives the promised overlay.',
-    subsetEmptyHint: 'The dedicated promise read model (amount + due date) is roadmap.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.promisesDue.sourceEmptyTitle'),
+    sourceEmptyDescription: t(
+      'dashboard.commandCenter.cards.promisesDue.sourceEmptyDescription',
+    ),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.promisesDue.subsetEmptyTitle'),
+    subsetEmptyDescription: t(
+      'dashboard.commandCenter.cards.promisesDue.subsetEmptyDescription',
+    ),
+    subsetEmptyHint: t('dashboard.commandCenter.cards.promisesDue.subsetEmptyHint'),
     subsetIsEmpty: (s) => s.promisesDue.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -441,7 +451,7 @@ function PromisesDueCard({ query, summary, onRetry }: CardProps<CaseView>) {
             <span className="font-semibold text-ink" data-testid="promises-due-now">
               {s.promisesDue.dueNow}
             </span>{' '}
-            with a follow-up due today or earlier
+            {t('dashboard.commandCenter.cards.promisesDue.dueNowSuffix')}
           </p>
           <ul className="flex flex-wrap gap-1.5" data-testid="promises-cases">
             {s.promisesDue.caseNumbers.map((caseNumber) => (
@@ -456,9 +466,9 @@ function PromisesDueCard({ query, summary, onRetry }: CardProps<CaseView>) {
   });
   return (
     <CommandCard
-      title="Promises due"
-      question="Which customers have promised money, and whose follow-up is due?"
-      derivation="GET /v1/collections/cases — live cases with derivedStatus 'promised'; due-now = uncompleted action scheduled ≤ today"
+      title={t('dashboard.commandCenter.cards.promisesDue.cardTitle')}
+      question={t('dashboard.commandCenter.cards.promisesDue.question')}
+      derivation={t('dashboard.commandCenter.cards.promisesDue.derivation')}
       state={state}
     />
   );
@@ -469,16 +479,19 @@ function PromisesDueCard({ query, summary, onRetry }: CardProps<CaseView>) {
 // ---------------------------------------------------------------------------
 
 function MissedPromisesCard({ query, summary, onRetry }: CardProps<CaseView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'Missed-promise tracking is unavailable',
+    title: t('dashboard.commandCenter.cards.missedPromises.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No collections cases yet',
-    sourceEmptyDescription:
-      'GET /v1/collections/cases returned an empty first page — open a case to start tracking.',
-    subsetEmptyTitle: 'No missed promises',
-    subsetEmptyDescription:
-      'No promised case carries a follow-up action still uncompleted after its scheduled day.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.missedPromises.sourceEmptyTitle'),
+    sourceEmptyDescription: t(
+      'dashboard.commandCenter.cards.missedPromises.sourceEmptyDescription',
+    ),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.missedPromises.subsetEmptyTitle'),
+    subsetEmptyDescription: t(
+      'dashboard.commandCenter.cards.missedPromises.subsetEmptyDescription',
+    ),
     subsetIsEmpty: (s) => s.missedPromises.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -498,9 +511,9 @@ function MissedPromisesCard({ query, summary, onRetry }: CardProps<CaseView>) {
   });
   return (
     <CommandCard
-      title="Missed promises"
-      question="Which promised follow-ups slipped past their scheduled day?"
-      derivation="GET /v1/collections/cases — promised cases with an uncompleted action scheduled before today"
+      title={t('dashboard.commandCenter.cards.missedPromises.cardTitle')}
+      question={t('dashboard.commandCenter.cards.missedPromises.question')}
+      derivation={t('dashboard.commandCenter.cards.missedPromises.derivation')}
       state={state}
     />
   );
@@ -511,16 +524,19 @@ function MissedPromisesCard({ query, summary, onRetry }: CardProps<CaseView>) {
 // ---------------------------------------------------------------------------
 
 function UnmatchedPaymentsCard({ query, summary, onRetry }: CardProps<PaymentView>) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'Unmatched-payment tracking is unavailable',
+    title: t('dashboard.commandCenter.cards.unmatchedPayments.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No payments on this deployment yet',
-    sourceEmptyDescription:
-      'The /v1/payments read model returned an empty first page. Money arrives through the Daraja intake funnel.',
-    subsetEmptyTitle: 'No unapplied confirmed cash',
-    subsetEmptyDescription:
-      'Every confirmed payment is fully allocated — nothing is waiting to be matched.',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.unmatchedPayments.sourceEmptyTitle'),
+    sourceEmptyDescription: t(
+      'dashboard.commandCenter.cards.unmatchedPayments.sourceEmptyDescription',
+    ),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.unmatchedPayments.subsetEmptyTitle'),
+    subsetEmptyDescription: t(
+      'dashboard.commandCenter.cards.unmatchedPayments.subsetEmptyDescription',
+    ),
     subsetIsEmpty: (s) => s.unmatchedPayments.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
@@ -529,16 +545,16 @@ function UnmatchedPaymentsCard({ query, summary, onRetry }: CardProps<PaymentVie
           count={s.unmatchedPayments.count}
           total={s.unmatchedPayments.total}
           mixedCurrency={s.unmatchedPayments.mixedCurrency}
-          totalLabel="confirmed but unapplied"
+          totalLabel={t('dashboard.commandCenter.cards.unmatchedPayments.totalLabel')}
         />
       ),
     }),
   });
   return (
     <CommandCard
-      title="Unmatched payments"
-      question="Whose cash landed but is not applied to an invoice yet?"
-      derivation="GET /v1/payments — confirmed ≠ null and unapplied &gt; 0; total = Σ unapplied"
+      title={t('dashboard.commandCenter.cards.unmatchedPayments.cardTitle')}
+      question={t('dashboard.commandCenter.cards.unmatchedPayments.question')}
+      derivation={t('dashboard.commandCenter.cards.unmatchedPayments.derivation')}
       state={state}
     />
   );
@@ -554,27 +570,30 @@ function OpportunitiesCard({
   onRetry,
   className = '',
 }: CardProps<ReceivableView> & { className?: string }) {
+  const t = usePortalT();
   const source = sourceRows(query);
   const state = emptyOrLoaded(source, summary, {
-    title: 'High-value opportunities are unavailable',
+    title: t('dashboard.commandCenter.cards.opportunities.errorTitle'),
     onRetry,
-    sourceEmptyTitle: 'No receivables on this deployment yet',
-    sourceEmptyDescription:
-      'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
-    subsetEmptyTitle: 'No outstanding balances to chase',
-    subsetEmptyDescription:
-      'No receivable is in an outstanding state (open / partially_paid).',
+    sourceEmptyTitle: t('dashboard.commandCenter.cards.opportunities.sourceEmptyTitle'),
+    sourceEmptyDescription: t(
+      'dashboard.commandCenter.cards.opportunities.sourceEmptyDescription',
+    ),
+    subsetEmptyTitle: t('dashboard.commandCenter.cards.opportunities.subsetEmptyTitle'),
+    subsetEmptyDescription: t(
+      'dashboard.commandCenter.cards.opportunities.subsetEmptyDescription',
+    ),
     subsetIsEmpty: (s) => s.opportunities.count === 0,
     loaded: (s) => ({
       kind: 'loaded',
       content: (
         <div className="space-y-2">
-          <Table aria-label="High-value opportunities">
+          <Table aria-label={t('dashboard.commandCenter.cards.opportunities.tableLabel')}>
             <THead>
               <TR>
-                <TH scope="col">Customer</TH>
-                <TH scope="col">Balance</TH>
-                <TH scope="col">Aging</TH>
+                <TH scope="col">{t('dashboard.commandCenter.cards.opportunities.col.customer')}</TH>
+                <TH scope="col">{t('dashboard.commandCenter.cards.opportunities.col.balance')}</TH>
+                <TH scope="col">{t('dashboard.commandCenter.cards.opportunities.col.aging')}</TH>
               </TR>
             </THead>
             <TBody>
@@ -584,7 +603,7 @@ function OpportunitiesCard({
                     {focus.customerId}
                     {focus.overdue && (
                       <Badge tone="warning" className="ml-2">
-                        overdue
+                        {t('dashboard.commandCenter.cards.opportunities.overdueBadge')}
                       </Badge>
                     )}
                   </TD>
@@ -606,10 +625,13 @@ function OpportunitiesCard({
             </TBody>
           </Table>
           <p className="text-xs text-ink-faint">
-            Top {s.opportunities.count} by outstanding balance — total book{' '}
-            {s.opportunities.total === null
-              ? 'spans currencies (count only)'
-              : formatMoney(s.opportunities.total)}
+            {t('dashboard.commandCenter.cards.opportunities.footerTotal', {
+              count: s.opportunities.count,
+              book:
+                s.opportunities.total === null
+                  ? t('dashboard.commandCenter.cards.opportunities.bookCountOnly')
+                  : formatMoney(s.opportunities.total),
+            })}
           </p>
         </div>
       ),
@@ -618,9 +640,9 @@ function OpportunitiesCard({
   return (
     <div className={className}>
       <CommandCard
-        title="High-value opportunities"
-        question="Where is the biggest collectable money right now?"
-        derivation="GET /v1/receivables — top 5 open|partially_paid rows ranked by balance (integer minor units)"
+        title={t('dashboard.commandCenter.cards.opportunities.cardTitle')}
+        question={t('dashboard.commandCenter.cards.opportunities.question')}
+        derivation={t('dashboard.commandCenter.cards.opportunities.derivation')}
         state={state}
       />
     </div>

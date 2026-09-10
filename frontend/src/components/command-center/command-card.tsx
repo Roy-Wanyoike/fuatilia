@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState, describeRefusalCode } from '@/components/ui/error-state';
 import { SkeletonMetric } from '@/components/ui/skeleton';
 import type { Refusal } from '@/lib/api/client';
+import { usePortalT } from '@/lib/portal-i18n/context';
 
 /**
  * One Command Center section. Exactly one of the four states renders:
@@ -30,6 +31,7 @@ export interface CommandCardProps {
 }
 
 export function CommandCard({ title, question, derivation, state }: CommandCardProps) {
+  const t = usePortalT();
   return (
     <Card
       role="region"
@@ -58,7 +60,9 @@ export function CommandCard({ title, question, derivation, state }: CommandCardP
         {state.kind === 'loaded' && state.content}
       </div>
       <CardFooter>
-        <span className="font-mono">derivation: {derivation}</span>
+        <span className="font-mono">
+          {t('dashboard.commandCenter.derivationLabel')} {derivation}
+        </span>
       </CardFooter>
     </Card>
   );

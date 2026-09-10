@@ -15,14 +15,18 @@ import type { Refusal } from '@/lib/api/client';
 import type { Money } from '@/lib/api/envelope';
 import { listAllPayments, listAllReceivables } from '@/lib/api/pagination';
 import { deriveOverview, type OverviewSummary } from '@/lib/derivation/command-center';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { formatMoney } from '@/lib/money';
 
 /**
  * / (Overview) — headline money positions derived from the same typed
  * read models as the Command Center (receivables + payments). Loading /
- * error / empty states are real query states, never fabricated.
+ * error / empty states are real query states, never fabricated. Every
+ * collector-facing string resolves through the shared i18n catalogs
+ * (issue #180).
  */
 export default function OverviewPage() {
+  const t = usePortalT();
   const receivablesQuery = useQuery({
     queryKey: ['api', 'receivables', 'all'],
     queryFn: () => listAllReceivables(defaultClient),
@@ -57,14 +61,12 @@ export default function OverviewPage() {
   return (
     <section aria-labelledby="overview-heading">
       <h1 id="overview-heading" className="text-lg font-semibold text-ink">
-        Overview
+        {t('dashboard.overview.title')}
       </h1>
-      <p className="mt-0.5 text-sm text-ink-soft">
-        Headline positions derived from the /v1 read models — actuals only, no predictions.
-      </p>
+      <p className="mt-0.5 text-sm text-ink-soft">{t('dashboard.overview.subtitle')}</p>
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         <HeadlineCard
-          title="Outstanding receivables"
+          title={t('dashboard.overview.cards.outstanding.title')}
           loading={receivablesQuery.isPending}
           refusal={receivablesRefusal}
           onRetry={() => {
@@ -72,10 +74,10 @@ export default function OverviewPage() {
           }}
           empty={receivablesEmpty}
           value={summary === null ? null : summary.outstanding}
-          totalLabel="open + partially paid balance"
+          totalLabel={t('dashboard.overview.cards.outstanding.totalLabel')}
         />
         <HeadlineCard
-          title="Overdue"
+          title={t('dashboard.overview.cards.overdue.title')}
           loading={receivablesQuery.isPending}
           refusal={receivablesRefusal}
           onRetry={() => {
@@ -83,10 +85,10 @@ export default function OverviewPage() {
           }}
           empty={receivablesEmpty}
           value={summary === null ? null : summary.overdue}
-          totalLabel="past-due balance"
+          totalLabel={t('dashboard.overview.cards.overdue.totalLabel')}
         />
         <HeadlineCard
-          title="Unmatched cash"
+          title={t('dashboard.overview.cards.unmatchedCash.title')}
           loading={paymentsQuery.isPending}
           refusal={paymentsRefusal}
           onRetry={() => {
@@ -94,7 +96,7 @@ export default function OverviewPage() {
           }}
           empty={paymentsEmpty}
           value={summary === null ? null : summary.unmatchedPayments}
-          totalLabel="confirmed but unapplied"
+          totalLabel={t('dashboard.overview.cards.unmatchedCash.totalLabel')}
         />
       </div>
     </section>
@@ -119,6 +121,7 @@ function HeadlineCard({
   value: { count: number; total: Money | null; mixedCurrency: boolean } | null;
   totalLabel: string;
 }) {
+  const t = usePortalT();
   return (
     <Card role="region" aria-label={title} aria-busy={loading}>
       <CardHeader>
@@ -128,7 +131,7 @@ function HeadlineCard({
         {loading && <SkeletonMetric rows={1} />}
         {!loading && refusal !== null && (
           <ErrorState
-            title={`${title} is unavailable`}
+            title={t('dashboard.overview.cardUnavailable', { card: title })}
             code={describeRefusalCode(refusal)}
             requestId={refusalRequestId(refusal)}
             message={refusalMessage(refusal)}
@@ -137,8 +140,8 @@ function HeadlineCard({
         )}
         {!loading && refusal === null && empty && (
           <EmptyState
-            title="Nothing here yet"
-            description="The underlying read model returned no rows on this deployment."
+            title={t('dashboard.overview.emptyTitle')}
+            description={t('dashboard.overview.emptyDescription')}
           />
         )}
         {!loading && refusal === null && !empty && value !== null && (
@@ -147,8 +150,8 @@ function HeadlineCard({
             <p className="mt-1 text-sm text-ink-soft">
               {value.total === null
                 ? value.mixedCurrency
-                  ? 'mixed currencies — count only (R10)'
-                  : 'total beyond exact integer range — count only'
+                  ? t('dashboard.overview.mixedCurrencyCountOnly')
+                  : t('dashboard.overview.rangeCountOnly')
                 : `${formatMoney(value.total)} ${totalLabel}`}
             </p>
           </div>
@@ -157,4 +160,3 @@ function HeadlineCard({
     </Card>
   );
 }
-

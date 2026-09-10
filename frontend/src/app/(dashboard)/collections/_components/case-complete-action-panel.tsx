@@ -15,7 +15,9 @@ import {
   type CollectionsCaseClient,
 } from '@/lib/collections/case-ops';
 import { formatTimestamp } from '@/lib/collections/display';
-import { ACTION_TYPE_LABELS, caseActionLadder } from '@/lib/collections/state-machine';
+import { caseActionLadder } from '@/lib/collections/state-machine';
+import { usePortalT } from '@/lib/portal-i18n/context';
+import { CASE_ACTION_TYPE_LABEL_KEYS } from './case-labels';
 
 /**
  * The COMPLETE-ACTION flow (issue #135) — POST /v1/collections/cases/
@@ -25,6 +27,7 @@ import { ACTION_TYPE_LABELS, caseActionLadder } from '@/lib/collections/state-ma
  * verbatim). The ladder here is the case's own open actions: completed
  * actions are never offered, a case with none gets an honest note instead
  * of a dead form, and a blank outcome is refused locally before the wire.
+ * Strings resolve through the shared i18n catalogs (issue #180).
  */
 
 export interface CaseCompleteActionPanelProps {
@@ -42,6 +45,7 @@ export function CaseCompleteActionPanel({
   writeClient = defaultCollectionsClient,
   onCaseReplaced,
 }: CaseCompleteActionPanelProps) {
+  const t = usePortalT();
   const ladder = caseActionLadder(caseView);
   // Defense in depth: an action is completable when the ladder says so AND
   // it self-describes as uncompleted (the wire refuses re-completions with
@@ -69,17 +73,17 @@ export function CaseCompleteActionPanel({
       <Card aria-labelledby="case-complete-action-heading" data-testid="case-complete-action-panel">
         <CardHeader>
           <CardTitle id="case-complete-action-heading" className="text-base">
-            Complete an action
+            {t('dashboard.collections.complete.title')}
           </CardTitle>
           <CardDescription>
-            POST …/actions/&#123;actionId&#125;/completions — stamp the outcome, exactly once.
+            {t('dashboard.collections.complete.sealedDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-ink-soft" data-testid="case-complete-action-empty">
             {caseView.actions.length === 0
-              ? 'No actions recorded on this case yet — record one above, then complete it with its outcome.'
-              : 'Every recorded action is already completed — nothing awaits an outcome.'}
+              ? t('dashboard.collections.complete.emptyNoActions')
+              : t('dashboard.collections.complete.emptyAllCompleted')}
           </p>
         </CardContent>
       </Card>
@@ -89,7 +93,7 @@ export function CaseCompleteActionPanel({
   async function submit(): Promise<void> {
     if (effectiveActionId === '') return;
     if (outcome.trim().length === 0) {
-      setLocalError('An outcome is required — a completion stamps what actually happened.');
+      setLocalError(t('dashboard.collections.complete.outcomeRequired'));
       return;
     }
     setLocalError(null);
@@ -117,10 +121,10 @@ export function CaseCompleteActionPanel({
     <Card aria-labelledby="case-complete-action-heading" data-testid="case-complete-action-panel">
       <CardHeader>
         <CardTitle id="case-complete-action-heading" className="text-base">
-          Complete an action
+          {t('dashboard.collections.complete.title')}
         </CardTitle>
         <CardDescription>
-          POST …/actions/&#123;actionId&#125;/completions — the outcome is stamped exactly once.
+          {t('dashboard.collections.complete.description')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -130,13 +134,13 @@ export function CaseCompleteActionPanel({
             className="rounded-md border border-ok-soft bg-ok-soft/40 px-4 py-3 text-sm text-ok"
             data-testid="case-complete-action-success"
           >
-            Action completed with outcome “{completedLabel}”.
+            {t('dashboard.collections.complete.success', { outcome: completedLabel })}
           </p>
         )}
 
         {phase === 'refused' && refusalState !== null && (
           <ErrorState
-            title="Couldn't complete the action"
+            title={t('dashboard.collections.complete.refusedTitle')}
             message={refusalState.message}
             code={refusalState.code}
             requestId={refusalState.requestId}
@@ -145,7 +149,7 @@ export function CaseCompleteActionPanel({
 
         <div>
           <label htmlFor="case-complete-action-select" className="text-sm font-medium text-ink">
-            Action awaiting completion
+            {t('dashboard.collections.complete.selectLabel')}
           </label>
           <select
             id="case-complete-action-select"
@@ -156,7 +160,10 @@ export function CaseCompleteActionPanel({
           >
             {completable.map((action) => (
               <option key={action.id} value={action.id}>
-                {ACTION_TYPE_LABELS[action.type]} — scheduled {formatTimestamp(action.scheduledFor)}
+                {t('dashboard.collections.complete.optionLabel', {
+                  type: t(CASE_ACTION_TYPE_LABEL_KEYS[action.type]),
+                  when: formatTimestamp(action.scheduledFor),
+                })}
               </option>
             ))}
           </select>
@@ -164,7 +171,7 @@ export function CaseCompleteActionPanel({
 
         <div>
           <label htmlFor="case-complete-action-outcome" className="text-sm font-medium text-ink">
-            Outcome <span aria-hidden="true">*</span>
+            {t('dashboard.collections.complete.outcomeLabel')} <span aria-hidden="true">*</span>
           </label>
           <textarea
             id="case-complete-action-outcome"
@@ -173,7 +180,7 @@ export function CaseCompleteActionPanel({
             rows={2}
             required
             disabled={phase === 'submitting'}
-            placeholder="What actually happened, e.g. spoke to site foreman — promised part payment"
+            placeholder={t('dashboard.collections.complete.outcomePlaceholder')}
             className="mt-1 w-full rounded-md border border-slate-300 bg-surface-raised px-3 py-2 text-sm text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
         </div>
@@ -189,7 +196,9 @@ export function CaseCompleteActionPanel({
         )}
 
         <Button onClick={() => void submit()} disabled={phase === 'submitting'}>
-          {phase === 'submitting' ? 'Completing…' : 'Complete action'}
+          {phase === 'submitting'
+            ? t('dashboard.collections.complete.submitting')
+            : t('dashboard.collections.complete.submit')}
         </Button>
       </CardContent>
     </Card>

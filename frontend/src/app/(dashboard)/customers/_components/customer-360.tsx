@@ -38,6 +38,7 @@ import {
   type CustomerPaymentsSummary,
   type CustomerReceivablesSummary,
 } from '@/lib/customers/derive';
+import { usePortalT } from '@/lib/portal-i18n/context';
 import { formatMoney } from '@/lib/money';
 
 /**
@@ -54,7 +55,8 @@ import { formatMoney } from '@/lib/money';
  * state — a refused source never blanks a sibling (the portal
  * balance-overview discipline). No customer directory, promise read model,
  * or comms endpoint is mounted on /v1, so those views are honest
- * derivations; nothing here is invented.
+ * derivations; nothing here is invented. Strings resolve through the shared
+ * i18n catalogs (issue #180); wire state/enum badges stay wire values.
  */
 
 const RECEIVABLES_KEY = ['api', 'receivables', 'all'] as const;
@@ -75,6 +77,7 @@ export function Customer360({
   client = defaultClient,
   clock = systemClock,
 }: Customer360Props) {
+  const t = usePortalT();
   const receivablesQuery = useQuery({
     queryKey: RECEIVABLES_KEY,
     queryFn: () => listAllReceivables(client),
@@ -145,30 +148,29 @@ export function Customer360({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 id="customer-360-heading" className="text-lg font-semibold text-ink">
-            Customer 360
+            {t('dashboard.customers.c360.title')}
           </h1>
           <p className="mt-0.5 font-mono text-sm text-ink-soft" data-testid="customer-id">
             {customerId}
           </p>
           <p className="mt-1 max-w-2xl text-sm text-ink-soft">
-            Receivables, payments, cases and communications attributed to this customer — fed
-            only by the mounted /v1 read models.
+            {t('dashboard.customers.c360.subtitle')}
           </p>
         </div>
         <Link
           href="/customers"
           className="text-sm font-medium text-accent underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          All customers
+          {t('dashboard.customers.c360.allCustomers')}
         </Link>
       </div>
 
       {noAttributableActivity && (
         <div className="mt-4" data-testid="no-customer-activity">
           <EmptyState
-            title="No /v1 activity is attributable to this customer id"
-            description="No receivable or payment row carries this customerId, and cases can only be attributed through receivables. The id is either unknown to this deployment or has no activity yet."
-            hint="The /v1 contract mounts no customer directory, so an unknown id cannot be distinguished from an inactive one — nothing is fabricated either way."
+            title={t('dashboard.customers.c360.noActivityTitle')}
+            description={t('dashboard.customers.c360.noActivityDescription')}
+            hint={t('dashboard.customers.c360.noActivityHint')}
           />
         </div>
       )}
@@ -179,8 +181,7 @@ export function Customer360({
           className="mt-4 rounded-md border border-warn-soft bg-warn-soft/40 px-3 py-2 text-xs text-ink-soft"
           data-testid="customer-360-truncated"
         >
-          Large dataset: the read path stopped at the payload-conscious page cap, so this view
-          covers the fetched rows only.
+          {t('dashboard.customers.c360.truncatedNote')}
         </p>
       )}
 
@@ -251,6 +252,7 @@ function CountTotalStat({
   stat: { count: number; total: import('@/lib/api/envelope').Money | null; mixedCurrency: boolean };
   testId?: string;
 }) {
+  const t = usePortalT();
   return (
     <div data-testid={testId}>
       <p className="text-2xl font-semibold tabular-nums text-ink">{stat.count}</p>
@@ -258,13 +260,17 @@ function CountTotalStat({
         {stat.total === null ? (
           stat.count === 0 ? (
             // Zero rows is not a refused total — say so instead of claiming one.
-            <>{label} · no rows yet</>
+            <>
+              {label} {t('dashboard.customers.c360.statFallbacks.noRows')}
+            </>
           ) : stat.mixedCurrency ? (
             <>
-              {label} · mixed currencies — count only (R10: no cross-currency totals)
+              {label} {t('dashboard.customers.c360.statFallbacks.mixed')}
             </>
           ) : (
-            <>{label} · beyond exact integer range — count only</>
+            <>
+              {label} {t('dashboard.customers.c360.statFallbacks.range')}
+            </>
           )
         ) : (
           <>
@@ -357,6 +363,7 @@ function ReceivablesSection({
   summary: CustomerReceivablesSummary | null;
   onRetry: () => void;
 }) {
+  const t = usePortalT();
   const source = sourceRows(query);
   let state: CommandCardState;
   if (source.status === 'loading') {
@@ -365,24 +372,22 @@ function ReceivablesSection({
     state = {
       kind: 'error',
       refusal: source.refusal,
-      title: 'Receivables are unavailable',
+      title: t('dashboard.customers.c360.receivables.errorTitle'),
       onRetry,
     };
   } else if (source.rows.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No receivables on this deployment yet',
-      description:
-        'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
+      title: t('dashboard.customers.c360.receivables.emptyDeploymentTitle'),
+      description: t('dashboard.customers.c360.receivables.emptyDeploymentDescription'),
     };
   } else if (summary === null) {
     state = { kind: 'loading' };
   } else if (summary.receivables.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No receivables carry this customer id',
-      description:
-        'The receivable read model has rows, but none of the fetched pages attributes this customerId.',
+      title: t('dashboard.customers.c360.receivables.emptyCustomerTitle'),
+      description: t('dashboard.customers.c360.receivables.emptyCustomerDescription'),
     };
   } else {
     state = { kind: 'loaded', content: <ReceivablesContent summary={summary} /> };
@@ -390,25 +395,34 @@ function ReceivablesSection({
 
   return (
     <CommandCard
-      title="Receivables & aging"
-      question="What does this customer owe, and how deep is it aged?"
-      derivation="GET /v1/receivables — customerId filter; aging over open|partially_paid rows (settled money is never aged)"
+      title={t('dashboard.customers.c360.receivables.cardTitle')}
+      question={t('dashboard.customers.c360.receivables.question')}
+      derivation={t('dashboard.customers.c360.receivables.derivation')}
       state={state}
     />
   );
 }
 
 function ReceivablesContent({ summary }: { summary: CustomerReceivablesSummary }) {
+  const t = usePortalT();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <CountTotalStat label="outstanding" stat={summary.outstanding} testId="stat-outstanding" />
-        <CountTotalStat label="overdue" stat={summary.overdue} testId="stat-overdue" />
+        <CountTotalStat
+          label={t('dashboard.customers.c360.stats.outstanding')}
+          stat={summary.outstanding}
+          testId="stat-outstanding"
+        />
+        <CountTotalStat
+          label={t('dashboard.customers.c360.stats.overdue')}
+          stat={summary.overdue}
+          testId="stat-overdue"
+        />
       </div>
 
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-          Aging buckets (outstanding balance)
+          {t('dashboard.customers.c360.agingTitle')}
         </p>
         <div className="mt-1.5 flex flex-wrap gap-1.5" data-testid="aging-buckets">
           {BUCKET_ORDER.map((bucket) => {
@@ -425,8 +439,8 @@ function ReceivablesContent({ summary }: { summary: CustomerReceivablesSummary }
                     ? stat.count === 0
                       ? '—' // an empty bucket is empty, not a refused total
                       : stat.mixedCurrency
-                        ? 'mixed currencies (R10)'
-                        : 'beyond exact range'
+                        ? t('dashboard.customers.c360.agingMixed')
+                        : t('dashboard.customers.c360.agingRange')
                     : formatMoney(stat.total)}
                 </span>
               </span>
@@ -435,8 +449,12 @@ function ReceivablesContent({ summary }: { summary: CustomerReceivablesSummary }
         </div>
         {summary.terminalCount > 0 && (
           <p className="mt-1.5 text-xs text-ink-faint">
-            {summary.terminalCount} further receivable
-            {summary.terminalCount === 1 ? '' : 's'} settled, written off or otherwise closed.
+            {t(
+              summary.terminalCount === 1
+                ? 'dashboard.customers.c360.terminalOne'
+                : 'dashboard.customers.c360.terminalMany',
+              { count: summary.terminalCount },
+            )}
           </p>
         )}
       </div>
@@ -444,11 +462,11 @@ function ReceivablesContent({ summary }: { summary: CustomerReceivablesSummary }
       <Table>
         <THead>
           <TR>
-            <TH scope="col">Invoice</TH>
-            <TH scope="col">State</TH>
-            <TH scope="col">Balance</TH>
-            <TH scope="col">Due</TH>
-            <TH scope="col">Aging</TH>
+            <TH scope="col">{t('dashboard.customers.c360.receivables.col.invoice')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.receivables.col.state')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.receivables.col.balance')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.receivables.col.due')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.receivables.col.aging')}</TH>
           </TR>
         </THead>
         <TBody>
@@ -459,7 +477,7 @@ function ReceivablesContent({ summary }: { summary: CustomerReceivablesSummary }
                 <Badge tone={RECEIVABLE_STATE_TONES[receivable.state]}>{receivable.state}</Badge>
                 {receivable.overdue && (
                   <Badge tone="warning" className="ml-1.5">
-                    overdue
+                    {t('dashboard.customers.c360.overdueBadge')}
                   </Badge>
                 )}
               </TD>
@@ -504,6 +522,7 @@ function PaymentsSection({
   summary: CustomerPaymentsSummary | null;
   onRetry: () => void;
 }) {
+  const t = usePortalT();
   const source = sourceRows(query);
   let state: CommandCardState;
   if (source.status === 'loading') {
@@ -512,24 +531,22 @@ function PaymentsSection({
     state = {
       kind: 'error',
       refusal: source.refusal,
-      title: 'Payment history is unavailable',
+      title: t('dashboard.customers.c360.payments.errorTitle'),
       onRetry,
     };
   } else if (source.rows.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No payments on this deployment yet',
-      description:
-        'The /v1/payments read model returned an empty first page. Money arrives through the Daraja intake funnel.',
+      title: t('dashboard.customers.c360.payments.emptyDeploymentTitle'),
+      description: t('dashboard.customers.c360.payments.emptyDeploymentDescription'),
     };
   } else if (summary === null) {
     state = { kind: 'loading' };
   } else if (summary.payments.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No payments carry this customer id',
-      description:
-        'The payment read model has rows, but none of the fetched pages attributes this customerId (payments without a customerId are unattributable).',
+      title: t('dashboard.customers.c360.payments.emptyCustomerTitle'),
+      description: t('dashboard.customers.c360.payments.emptyCustomerDescription'),
     };
   } else {
     state = { kind: 'loaded', content: <PaymentsContent summary={summary} /> };
@@ -537,21 +554,26 @@ function PaymentsSection({
 
   return (
     <CommandCard
-      title="Payment history & allocations"
-      question="What money moved, and where was it applied?"
-      derivation="GET /v1/payments — customerId filter; allocations flattened from allocations[] rows"
+      title={t('dashboard.customers.c360.payments.cardTitle')}
+      question={t('dashboard.customers.c360.payments.question')}
+      derivation={t('dashboard.customers.c360.payments.derivation')}
       state={state}
     />
   );
 }
 
 function PaymentsContent({ summary }: { summary: CustomerPaymentsSummary }) {
+  const t = usePortalT();
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <CountTotalStat label="confirmed" stat={summary.confirmed} testId="stat-confirmed" />
         <CountTotalStat
-          label="held on account"
+          label={t('dashboard.customers.c360.stats.confirmed')}
+          stat={summary.confirmed}
+          testId="stat-confirmed"
+        />
+        <CountTotalStat
+          label={t('dashboard.customers.c360.stats.heldOnAccount')}
           stat={summary.heldOnAccount}
           testId="stat-held-on-account"
         />
@@ -570,31 +592,43 @@ function PaymentsContent({ summary }: { summary: CustomerPaymentsSummary }) {
                 {payment.confirmed === null ? (
                   <>
                     {formatMoney(payment.requested)}{' '}
-                    <span className="font-normal text-ink-faint">requested</span>
+                    <span className="font-normal text-ink-faint">
+                      {t('dashboard.customers.c360.paymentRow.requestedLabel')}
+                    </span>
                   </>
                 ) : (
                   <>
                     {formatMoney(payment.confirmed)}{' '}
-                    <span className="font-normal text-ink-faint">confirmed</span>
+                    <span className="font-normal text-ink-faint">
+                      {t('dashboard.customers.c360.paymentRow.confirmedLabel')}
+                    </span>
                   </>
                 )}
               </span>
               {payment.unapplied.minor > 0 && (
                 <span className="tabular-nums text-xs text-ink-soft">
-                  {formatMoney(payment.unapplied)} unapplied
+                  {t('dashboard.customers.c360.paymentRow.unappliedSuffix', {
+                    amount: formatMoney(payment.unapplied),
+                  })}
                 </span>
               )}
               <time dateTime={payment.initiatedAt} className="text-xs text-ink-soft">
-                initiated {formatInstant(payment.initiatedAt)}
+                {t('dashboard.customers.c360.paymentRow.initiatedPrefix', {
+                  at: formatInstant(payment.initiatedAt),
+                })}
               </time>
             </div>
             {payment.failureCode !== null && payment.failureCode.length > 0 && (
               <p className="text-xs text-danger">
-                failure code: <span className="font-mono">{payment.failureCode}</span>
+                {t('dashboard.customers.c360.paymentRow.failureCodePrefix')}{' '}
+                <span className="font-mono">{payment.failureCode}</span>
               </p>
             )}
             {payment.reversalReason !== null && payment.reversalReason.length > 0 && (
-              <p className="text-xs text-ink-soft">reversal reason: {payment.reversalReason}</p>
+              <p className="text-xs text-ink-soft">
+                {t('dashboard.customers.c360.paymentRow.reversalReasonPrefix')}{' '}
+                {payment.reversalReason}
+              </p>
             )}
             {(payment.allocations.length > 0 || payment.refunds.length > 0) && (
               <ul className="space-y-1" data-testid={`payment-${payment.id}-ledger`}>
@@ -606,8 +640,9 @@ function PaymentsContent({ summary }: { summary: CustomerPaymentsSummary }) {
                     <span className="tabular-nums font-semibold text-ink">
                       {formatMoney(allocation.amount)}
                     </span>{' '}
-                    applied to receivable{' '}
-                    <span className="font-mono">{allocation.receivableId}</span>{' '}
+                    {t('dashboard.customers.c360.paymentRow.appliedTo', {
+                      id: allocation.receivableId,
+                    })}{' '}
                     <time dateTime={allocation.recordedAt}>
                       · {formatInstant(allocation.recordedAt)}
                     </time>
@@ -621,7 +656,7 @@ function PaymentsContent({ summary }: { summary: CustomerPaymentsSummary }) {
                     <span className="tabular-nums font-semibold text-ink">
                       {formatMoney(refund.amount)}
                     </span>{' '}
-                    refunded
+                    {t('dashboard.customers.c360.paymentRow.refunded')}
                     {refund.reason.length > 0 ? <> — {refund.reason}</> : null}{' '}
                     <time dateTime={refund.recordedAt}>
                       · {formatInstant(refund.recordedAt)}
@@ -654,6 +689,7 @@ function CasesSection({
 }) {
   const casesSource = sourceRows(casesQuery);
   const receivablesSource = sourceRows(receivablesQuery);
+  const t = usePortalT();
   let state: CommandCardState;
   if (casesSource.status === 'loading' || receivablesSource.status === 'loading') {
     state = { kind: 'loading' };
@@ -661,7 +697,7 @@ function CasesSection({
     state = {
       kind: 'error',
       refusal: casesSource.refusal,
-      title: 'Collections cases are unavailable',
+      title: t('dashboard.customers.c360.cases.errorTitle'),
       onRetry,
     };
   } else if (receivablesSource.status === 'error') {
@@ -670,24 +706,22 @@ function CasesSection({
     state = {
       kind: 'error',
       refusal: receivablesSource.refusal,
-      title: 'Case attribution is unavailable',
+      title: t('dashboard.customers.c360.cases.attributionErrorTitle'),
       onRetry,
     };
   } else if (casesSource.rows.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No collections cases yet',
-      description:
-        'GET /v1/collections/cases returned an empty first page — open a case to start tracking.',
+      title: t('dashboard.customers.c360.cases.emptyDeploymentTitle'),
+      description: t('dashboard.customers.c360.cases.emptyDeploymentDescription'),
     };
   } else if (summary === null) {
     state = { kind: 'loading' };
   } else if (summary.cases.length === 0) {
     state = {
       kind: 'empty',
-      title: "No cases touch this customer's receivables",
-      description:
-        'Cases link to customers only through receivableIds; none of the fetched cases covers this customer\u2019s receivables.',
+      title: t('dashboard.customers.c360.cases.emptyCustomerTitle'),
+      description: t('dashboard.customers.c360.cases.emptyCustomerDescription'),
     };
   } else {
     state = { kind: 'loaded', content: <CasesContent summary={summary} /> };
@@ -695,30 +729,31 @@ function CasesSection({
 
   return (
     <CommandCard
-      title="Collections cases & promises"
-      question="Is this customer in active collections, and what did they promise?"
-      derivation="GET /v1/collections/cases — attributed via receivableIds; promises from the derivedStatus overlay + earliest uncompleted action"
+      title={t('dashboard.customers.c360.cases.cardTitle')}
+      question={t('dashboard.customers.c360.cases.question')}
+      derivation={t('dashboard.customers.c360.cases.derivation')}
       state={state}
     />
   );
 }
 
 function CasesContent({ summary }: { summary: CustomerCasesSummary }) {
+  const t = usePortalT();
   return (
     <div className="space-y-4">
       <p className="text-xs text-ink-soft" data-testid="open-case-count">
-        <span className="font-semibold text-ink">{summary.openCaseCount}</span> open (
-        {summary.cases.length} total incl. resolved/closed)
+        <span className="font-semibold text-ink">{summary.openCaseCount}</span>{' '}
+        {t('dashboard.customers.c360.openCaseCountSuffix', { total: summary.cases.length })}
       </p>
 
       <Table>
         <THead>
           <TR>
-            <TH scope="col">Case</TH>
-            <TH scope="col">Priority</TH>
-            <TH scope="col">Status</TH>
-            <TH scope="col">Actions</TH>
-            <TH scope="col">Opened</TH>
+            <TH scope="col">{t('dashboard.customers.c360.cases.col.case')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.cases.col.priority')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.cases.col.status')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.cases.col.actions')}</TH>
+            <TH scope="col">{t('dashboard.customers.c360.cases.col.opened')}</TH>
           </TR>
         </THead>
         <TBody>
@@ -746,9 +781,13 @@ function CasesContent({ summary }: { summary: CustomerCasesSummary }) {
       </Table>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Promises</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+          {t('dashboard.customers.c360.promises.title')}
+        </p>
         {summary.promises.length === 0 ? (
-          <p className="mt-1 text-xs text-ink-faint">No live promised cases.</p>
+          <p className="mt-1 text-xs text-ink-faint">
+            {t('dashboard.customers.c360.promises.empty')}
+          </p>
         ) : (
           <ul className="mt-1.5 space-y-1.5" data-testid="promises">
             {summary.promises.map((promise) => (
@@ -758,17 +797,19 @@ function CasesContent({ summary }: { summary: CustomerCasesSummary }) {
               >
                 <span className="font-mono text-ink">{promise.caseNumber}</span>
                 {promise.missed ? (
-                  <Badge tone="danger">missed</Badge>
+                  <Badge tone="danger">{t('dashboard.customers.c360.promises.missed')}</Badge>
                 ) : promise.dueNow ? (
-                  <Badge tone="warning">due now</Badge>
+                  <Badge tone="warning">{t('dashboard.customers.c360.promises.dueNow')}</Badge>
                 ) : (
-                  <Badge tone="neutral">scheduled</Badge>
+                  <Badge tone="neutral">{t('dashboard.customers.c360.promises.scheduled')}</Badge>
                 )}
                 {promise.nextActionAt === null ? (
-                  <span>no pending follow-up</span>
+                  <span>{t('dashboard.customers.c360.promises.noPendingFollowUp')}</span>
                 ) : (
                   <time dateTime={promise.nextActionAt}>
-                    next follow-up {formatInstant(promise.nextActionAt)}
+                    {t('dashboard.customers.c360.promises.nextFollowUp', {
+                      at: formatInstant(promise.nextActionAt),
+                    })}
                   </time>
                 )}
               </li>
@@ -797,6 +838,7 @@ function CommsSection({
 }) {
   const casesSource = sourceRows(casesQuery);
   const receivablesSource = sourceRows(receivablesQuery);
+  const t = usePortalT();
   let state: CommandCardState;
   if (casesSource.status === 'loading' || receivablesSource.status === 'loading') {
     state = { kind: 'loading' };
@@ -804,31 +846,29 @@ function CommsSection({
     state = {
       kind: 'error',
       refusal: casesSource.refusal,
-      title: 'The communications timeline is unavailable',
+      title: t('dashboard.customers.c360.comms.errorTitle'),
       onRetry,
     };
   } else if (receivablesSource.status === 'error') {
     state = {
       kind: 'error',
       refusal: receivablesSource.refusal,
-      title: 'Comms attribution is unavailable',
+      title: t('dashboard.customers.c360.comms.attributionErrorTitle'),
       onRetry,
     };
   } else if (casesSource.rows.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No collections cases yet',
-      description:
-        'The communications log derives from case actions, and the case read model is empty.',
+      title: t('dashboard.customers.c360.comms.emptyDeploymentTitle'),
+      description: t('dashboard.customers.c360.comms.emptyDeploymentDescription'),
     };
   } else if (summary === null) {
     state = { kind: 'loading' };
   } else if (summary.comms.length === 0) {
     state = {
       kind: 'empty',
-      title: 'No case actions for this customer yet',
-      description:
-        "The customer's cases carry no recorded actions (calls, messages, letters, visits, escalations) yet.",
+      title: t('dashboard.customers.c360.comms.emptyCustomerTitle'),
+      description: t('dashboard.customers.c360.comms.emptyCustomerDescription'),
     };
   } else {
     state = { kind: 'loaded', content: <CommsContent summary={summary} /> };
@@ -836,15 +876,16 @@ function CommsSection({
 
   return (
     <CommandCard
-      title="Communications timeline"
-      question="What has been said, sent and scheduled with this customer?"
-      derivation="case actions of attributed cases — GET /v1/collections/cases (actions[]; no dedicated comms endpoint is mounted)"
+      title={t('dashboard.customers.c360.comms.cardTitle')}
+      question={t('dashboard.customers.c360.comms.question')}
+      derivation={t('dashboard.customers.c360.comms.derivation')}
       state={state}
     />
   );
 }
 
 function CommsContent({ summary }: { summary: CustomerCasesSummary }) {
+  const t = usePortalT();
   return (
     <ol className="flex flex-col divide-y divide-slate-100" data-testid="comms-timeline">
       {summary.comms.map((entry) => (
@@ -854,18 +895,24 @@ function CommsContent({ summary }: { summary: CustomerCasesSummary }) {
             <Badge tone={sourceTone(entry.source)}>{entry.source}</Badge>
             <span className="font-mono text-xs text-ink-soft">{entry.caseNumber}</span>
             {entry.completedAt === null ? (
-              <Badge tone="warning">pending</Badge>
+              <Badge tone="warning">{t('dashboard.customers.c360.commsRow.pending')}</Badge>
             ) : (
-              <Badge tone="success">completed</Badge>
+              <Badge tone="success">{t('dashboard.customers.c360.commsRow.completed')}</Badge>
             )}
           </div>
           <p className="text-xs text-ink-soft">
-            <time dateTime={entry.scheduledFor}>scheduled {formatInstant(entry.scheduledFor)}</time>
+            <time dateTime={entry.scheduledFor}>
+              {t('dashboard.customers.c360.commsRow.scheduledAt', {
+                at: formatInstant(entry.scheduledFor),
+              })}
+            </time>
             {entry.completedAt !== null && (
               <>
                 {' · '}
                 <time dateTime={entry.completedAt}>
-                  completed {formatInstant(entry.completedAt)}
+                  {t('dashboard.customers.c360.commsRow.completedAt', {
+                    at: formatInstant(entry.completedAt),
+                  })}
                 </time>
               </>
             )}
@@ -874,7 +921,9 @@ function CommsContent({ summary }: { summary: CustomerCasesSummary }) {
             <p className="break-words text-xs text-ink">{entry.outcome}</p>
           )}
           {entry.consentRef !== null && entry.consentRef.length > 0 && (
-            <p className="font-mono text-xs text-ink-faint">consent ref: {entry.consentRef}</p>
+            <p className="font-mono text-xs text-ink-faint">
+              {t('dashboard.customers.c360.commsRow.consentRefPrefix')} {entry.consentRef}
+            </p>
           )}
         </li>
       ))}
