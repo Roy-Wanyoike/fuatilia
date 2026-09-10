@@ -40,10 +40,12 @@ import (
 )
 
 // SigningKeys resolves the signing secret for an endpoint. Production binds
-// a KMS adapter here (0012 stores endpoint secrets HASHED — secret_hash /
-// secret_prefix are identification references, never plaintext); the port
-// keeps this worker honest: it cannot sign with a secret it could not
-// resolve, and implementations must never embed secret material in errors.
+// EnvSigningKeys (keys.go — the env-backed default; see
+// docs/security/secrets.md for the rotation path) or a KMS adapter here
+// (0012 stores endpoint secrets HASHED — secret_hash / secret_prefix are
+// identification references, never plaintext); the port keeps this worker
+// honest: it cannot sign with a secret it could not resolve, and
+// implementations must never embed secret material in errors.
 type SigningKeys interface {
 	SecretFor(ctx context.Context, orgID, endpointID string) (string, error)
 }
