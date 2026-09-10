@@ -71,8 +71,8 @@ func (s *Stores) StkInitiationByIdempotencyKey(ctx context.Context, q Querier, o
 func (s *Stores) InsertStkInitiation(ctx context.Context, q Querier, r StkInitiationRow) error {
 	_, err := q.Exec(ctx,
 		`INSERT INTO stk_initiations (id, org_id, action_id, checkout_request_id, merchant_request_id,
-		                              customer_id, idempotency_key, requested_minor, currency, state, initiated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                                              customer_id, idempotency_key, requested_minor, currency, state, initiated_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		r.ID, r.OrgID, r.ActionID, r.CheckoutRequestID, r.MerchantRequestID,
 		r.CustomerID, r.IdempotencyKey, r.RequestedMinor, r.Currency, r.State, r.InitiatedAt)
 	return err
@@ -83,10 +83,19 @@ func (s *Stores) InsertStkInitiation(ctx context.Context, q Querier, r StkInitia
 func (s *Stores) ResolveStkInitiation(ctx context.Context, q Querier, orgID, checkoutRequestID, state, failureCode string, at time.Time) error {
 	_, err := q.Exec(ctx,
 		`UPDATE stk_initiations
-		    SET state = $3, resolved_at = $4, resolved_late = FALSE, failure_code = $5, updated_at = now()
-		  WHERE org_id = $1 AND checkout_request_id = $2 AND state = 'initiated'`,
+                    SET state = $3, resolved_at = $4, resolved_late = FALSE, failure_code = $5, updated_at = now()
+                  WHERE org_id = $1 AND checkout_request_id = $2 AND state = 'initiated'`,
 		orgID, checkoutRequestID, state, at, nullText(failureCode))
 	return err
+}
+
+// OrgExists reports whether the org row exists — the callback endpoints'
+// :orgId router check (the URL segment is operator-configured, but a stale
+// or foreign org id must never become a money event: fail closed, dead-letter).
+func (s *Stores) OrgExists(ctx context.Context, q Querier, orgID string) (bool, error) {
+	var exists bool
+	err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM orgs WHERE id = $1)`, orgID).Scan(&exists)
+	return exists, err
 }
 
 // JourneyClaim is the org-bound durable implementation of
@@ -108,8 +117,8 @@ func (c JourneyClaim) ClaimJourney(ctx context.Context, journeyKey string, amoun
 	q := c.Stores.Pool
 	tag, err := q.Exec(ctx,
 		`INSERT INTO daraja_callback_journeys (journey_key, org_id, kind, amount_minor)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (journey_key) DO NOTHING`,
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (journey_key) DO NOTHING`,
 		journeyKey, c.OrgID, c.Kind, amountMinor)
 	if err != nil {
 		return false, 0, err
@@ -133,8 +142,8 @@ func (c JourneyClaim) ClaimJourney(ctx context.Context, journeyKey string, amoun
 func (s *Stores) FailPayment(ctx context.Context, q Querier, orgID, paymentID, failureCode string, at time.Time) error {
 	_, err := q.Exec(ctx,
 		`UPDATE payments
-		    SET state = 'failed', failed_at = $4, failure_code = $3, updated_at = now()
-		  WHERE org_id = $1 AND id = $2 AND state IN ('initiated', 'pending_confirmation')`,
+                    SET state = 'failed', failed_at = $4, failure_code = $3, updated_at = now()
+                  WHERE org_id = $1 AND id = $2 AND state IN ('initiated', 'pending_confirmation')`,
 		orgID, paymentID, failureCode, at)
 	return err
 }

@@ -59,6 +59,11 @@ var exactStatus = map[string]int{
 	"CASE_CLOSED":                   409,
 	"CASE_ACTION_ALREADY_COMPLETED": 409,
 	"DUNNING_CONSENT_REQUIRED":      403,
+	// Daraja rail-facing callbacks (issue #178): the K1 parse's
+	// catch-all refusal — every specific payload code already maps via
+	// the suffix rules (_REQUIRED/_MALFORMED/_INVALID/_UNKNOWN …); the
+	// generic shape refusal has no suffix and dead-letters as 400.
+	"DARAJA_PAYLOAD_UNRECOGNIZED": 400,
 }
 
 // prefixStatus families: whole code families with one meaning.

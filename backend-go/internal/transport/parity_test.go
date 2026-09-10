@@ -17,6 +17,13 @@ import (
 // the operation set api/openapi/fuatilia.v1.yaml declares — no drift in
 // either direction, no missing op, no invented route. A future lane that
 // mounts or removes an op without the contract (or vice versa) fails here.
+//
+// Deliberate exception (issue #178): the Daraja rail-facing callback rows are
+// mounted on the kernel but are NOT console API operations — their consumers
+// are Safaricom's M-Pesa pipes, which authenticate by being the rail (the
+// threat model's B1 boundary), not by the console's API keys. The rail set is
+// PINNED below: a kernel row that is not an OpenAPI op and not in this set
+// fails the test, so the exception cannot grow silently.
 func TestServedRoutesMatchOpenAPI(t *testing.T) {
 	specPath := findOpenAPISpec(t)
 	specRoutes := parseOpenAPIOperations(t, specPath)
@@ -25,13 +32,23 @@ func TestServedRoutesMatchOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compose route table: %v", err)
 	}
+	railFacing := map[string]bool{
+		// The three Daraja callback rows (internal/transport/callbacks.go):
+		"POST /v1/callbacks/daraja/{orgId}/c2b/validation":   true,
+		"POST /v1/callbacks/daraja/{orgId}/c2b/confirmation": true,
+		"POST /v1/callbacks/daraja/stk/result":               true,
+	}
 	served := map[string]bool{}
 	for _, record := range composed.Kernel.Table() {
-		served[record.Method+" "+openAPIPathOf(record.Pattern)] = true
+		route := record.Method + " " + openAPIPathOf(record.Pattern)
+		if railFacing[route] {
+			continue // the pinned rail exception — asserted separately below
+		}
+		served[route] = true
 	}
 
 	if len(served) != len(specRoutes) {
-		t.Fatalf("route count drift: OpenAPI declares %d operations, the kernel serves %d", len(specRoutes), len(served))
+		t.Fatalf("route count drift: OpenAPI declares %d operations, the kernel serves %d console routes", len(specRoutes), len(served))
 	}
 	if len(specRoutes) != 27 {
 		t.Fatalf("OpenAPI operation count changed: expected the 27 mounted ops, yaml declares %d — update this test with the contract deliberately", len(specRoutes))
@@ -52,6 +69,29 @@ func TestServedRoutesMatchOpenAPI(t *testing.T) {
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
 		t.Fatalf("OpenAPI parity drift\n  declared but not served: %v\n  served but not declared: %v", missing, extra)
+	}
+
+	// The rail rows must be mounted EXACTLY as pinned — a renamed or removed
+	// callback row breaks the rail contract just as surely as an invented one.
+	servedAll := map[string]bool{}
+	for _, record := range composed.Kernel.Table() {
+		servedAll[record.Method+" "+openAPIPathOf(record.Pattern)] = true
+	}
+	var railMissing, railExtra []string
+	for route := range railFacing {
+		if !servedAll[route] {
+			railMissing = append(railMissing, route)
+		}
+	}
+	for route := range servedAll {
+		if !specRoutes[route] && !railFacing[route] {
+			railExtra = append(railExtra, route)
+		}
+	}
+	sort.Strings(railMissing)
+	sort.Strings(railExtra)
+	if len(railMissing) > 0 || len(railExtra) > 0 {
+		t.Fatalf("rail-facing route drift\n  pinned but not served: %v\n  served but neither declared nor pinned: %v", railMissing, railExtra)
 	}
 }
 
