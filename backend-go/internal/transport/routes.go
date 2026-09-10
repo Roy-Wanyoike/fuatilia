@@ -767,11 +767,13 @@ func actionWireView(a application.CaseAction) map[string]any {
 	}
 }
 
-// mountRoutes assembles the FULL 27-op table in TS composition order
+// mountRoutes assembles the FULL 27-op console table in TS composition order
 // (server.ts): public rows + the auth admin table + the resource tables.
 // The capability list is derived over the admin+resource rows ONLY (the TS
 // composition derives before mounting health/meta — public rows are not
-// capabilities).
+// capabilities). The Daraja rail-facing callback rows (issue #178) mount
+// AFTER that derivation — they are integration surface for Safaricom's
+// pipes, never console capabilities, and parity_test.go pins them exactly.
 func mountRoutes(deps Deps) ([]RouteRecord, error) {
 	mounted := []RouteRecord{}
 	mounted = append(mounted, authAdminRoutes(deps)...)
@@ -786,6 +788,7 @@ func mountRoutes(deps Deps) ([]RouteRecord, error) {
 	table = append(table, publicRoutes()...)
 	table = append(table, mounted...)
 	table = append(table, metaRoute(capabilities))
+	table = append(table, darajaCallbackRoutes(deps)...)
 	return table, nil
 }
 

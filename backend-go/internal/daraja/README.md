@@ -52,6 +52,27 @@ is preserved on `Error.UpstreamCode`; its `errorMessage` joins the log-safe
 Passkeys / B2C `SecurityCredential` / initiator names are per-call inputs the SERVICE layer
 injects from its own secret source — never literals in code, never in logs.
 
+## Process surface (issue #178)
+
+The outbound STK wire (`port.go`) is the seam the collections execute action
+binds: `application.ExecuteStkPush → StkPushWire.Initiate` with the R9 key
+`stkpush:<actionId>`. `cmd/api` binds `STKWire` over a live client when all
+five `DARAJA_*` rail variables are set (`DARAJA_CONSUMER_KEY/_SECRET`,
+`DARAJA_SHORT_CODE`, `DARAJA_PASSKEY`, `DARAJA_CALLBACK_BASE_URL`); every one
+empty disables the rail (the execute path refuses `STK_WIRE_UNAVAILABLE`), a
+partial set is a boot failure.
+
+The inbound rail endpoints live in `internal/transport/callbacks.go` —
+`POST /v1/callbacks/daraja/:orgId/c2b/validation`,
+`POST /v1/callbacks/daraja/:orgId/c2b/confirmation` (org routed by the
+operator-configured URL) and `POST /v1/callbacks/daraja/stk/result` (org
+routed by the globally-unique rail-minted checkout id). They are public rows
+on the kernel (the rail presents no credentials), run every payload through
+`ParseCallback` → `IntakeCallback` (the durable PostgreSQL journey ledger)
+and settle fresh journeys through the payments intake funnel. They are
+deliberately NOT OpenAPI operations — the consumers are Safaricom's pipes,
+not console clients — and the parity test pins that exception exactly.
+
 ## Semantics worth knowing
 
 - **R9 truth stays in the domain.** The client's in-flight guard only collapses *concurrent*

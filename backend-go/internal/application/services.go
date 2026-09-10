@@ -10,6 +10,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/daraja"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/infra"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/repositories"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/pkg/idempotency"
@@ -31,6 +32,12 @@ type Services struct {
 	// poisons a legitimate retry — the exact discipline pkg/idempotency
 	// documents for durable bindings.
 	Replays *idempotency.Registry[string]
+	// StkPush is the OUTBOUND STK initiation port (issue #178): the daraja
+	// STKWire adapter in production wiring, a deterministic fake in tests.
+	// nil DISABLES STK execution — ExecuteStkPush refuses with
+	// STK_WIRE_UNAVAILABLE (a composition that never configured Daraja can
+	// never invent a push).
+	StkPush daraja.StkPushWire
 }
 
 // Now returns the injected clock's instant.
@@ -54,18 +61,18 @@ func (s *Services) appendOutbox(ctx context.Context, tx repositories.Querier, or
 // When the key is already claimed, the ORIGINAL outcome reference is loaded
 // and ok=false is returned so the caller replays it instead of re-executing
 // (R9/C5: a duplicate is the SAME logical command).
-func (s *Services) claimIdempotencyKey(ctx context.Context, tx repositories.Querier, orgID, key, outcomeRef string) (originalRef string, replayed bool, err error) {
+func (s *Services) claimIdempotencyKey(ctx context.Context, tx repositories.Querier, orgID, scope, key, outcomeRef string) (originalRef string, replayed bool, err error) {
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO idempotency_keys (org_id, scope, key, outcome_ref)
                  VALUES ($1, $2, $3, $4)
                  ON CONFLICT (org_id, scope, key) DO NOTHING`,
-		orgID, idempotencyScopeIntake, key, outcomeRef); err != nil {
+		orgID, scope, key, outcomeRef); err != nil {
 		return "", false, err
 	}
 	var ref string
 	err = tx.QueryRow(ctx,
 		`SELECT outcome_ref FROM idempotency_keys WHERE org_id = $1 AND scope = $2 AND key = $3`,
-		orgID, idempotencyScopeIntake, key).Scan(&ref)
+		orgID, scope, key).Scan(&ref)
 	if err != nil {
 		return "", false, err
 	}
@@ -74,25 +81,25 @@ func (s *Services) claimIdempotencyKey(ctx context.Context, tx repositories.Quer
 
 // lookupIdempotencyKey resolves a claimed key to its original outcome id
 // ("" when the key is unclaimed).
-func (s *Services) lookupIdempotencyKey(ctx context.Context, q repositories.Querier, orgID, key string) string {
+func (s *Services) lookupIdempotencyKey(ctx context.Context, q repositories.Querier, orgID, scope, key string) string {
 	if s.Replays != nil {
-		if ref, ok := s.Replays.Lookup(idempotencyScopeIntake+":"+orgID, key); ok {
+		if ref, ok := s.Replays.Lookup(scope+":"+orgID, key); ok {
 			return ref
 		}
 	}
 	var ref string
 	_ = q.QueryRow(ctx,
 		`SELECT outcome_ref FROM idempotency_keys WHERE org_id = $1 AND scope = $2 AND key = $3`,
-		orgID, idempotencyScopeIntake, key).Scan(&ref)
+		orgID, scope, key).Scan(&ref)
 	return ref
 }
 
 // rememberReplay records a COMMITTED outcome in the process-local hot cache
 // (never inside a transaction — only outcomes that survived COMMIT may
 // replay from memory).
-func (s *Services) rememberReplay(orgID, key, outcomeRef string) {
+func (s *Services) rememberReplay(orgID, scope, key, outcomeRef string) {
 	if s.Replays == nil {
 		return
 	}
-	_ = s.Replays.Put(idempotencyScopeIntake+":"+orgID, key, outcomeRef)
+	_ = s.Replays.Put(scope+":"+orgID, key, outcomeRef)
 }

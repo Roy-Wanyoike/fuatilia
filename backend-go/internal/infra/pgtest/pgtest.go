@@ -58,13 +58,19 @@ const (
 
 	// SharedDBName is this lane's dedicated database on the shared cluster.
 	SharedDBName = "fuatilia_api_test"
+	// ApplicationDBName is the application lane's dedicated database on the
+	// shared cluster (issue #178): the STK execute tests truncate at boot and
+	// cleanup, and a second test binary doing the same against ONE database
+	// would wipe the other's seed mid-run — so every truncating lane owns a
+	// named database (RequireSharedFor) and the cluster is merely shared.
+	ApplicationDBName = "fuatilia_app_test"
 	// superuser is the trust-auth superuser the lane clusters run with.
 	superuser = "postgres"
 
 	// migrationCount is the expected db/migrations/*.sql file count; a drift
 	// fails loudly instead of silently applying a partial schema. Bump in the
-	// same change that adds db/migrations/0016+ (issue #179's cleanup lane).
-	migrationCount = 16
+	// same change that adds db/migrations/0017+ (issue #178's Daraja lane).
+	migrationCount = 17
 )
 
 // Host is the TCP host the lane clusters listen on.
@@ -108,6 +114,26 @@ func RequireShared(ctx context.Context) (*Cluster, error) {
 		return nil, sharedErr
 	}
 	return sharedRef, nil
+}
+
+// RequireSharedFor is RequireShared with a per-lane database name: the same
+// bootstrapped cluster, a DEDICATED migrated database (created on first use;
+// migrations 0001–00NN applied under the same advisory lock). Two test
+// binaries that truncate their lanes at boot/cleanup (transport +
+// application, issue #178) each own a name, so the cluster is shared but no
+// row space is — a truncate can never wipe another package's seed mid-run.
+func RequireSharedFor(ctx context.Context, dbName string) (*Cluster, error) {
+	cluster, err := RequireShared(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if dbName == "" || dbName == SharedDBName {
+		return cluster, nil
+	}
+	if err := cluster.ensureMigratedDBFor(ctx, dbName); err != nil {
+		return nil, err
+	}
+	return cluster, nil
 }
 
 // TruncateAll wipes every row this lane seeded from the shared database
@@ -233,25 +259,31 @@ func (c *Cluster) Stop(ctx context.Context) error {
 // migrations 0001–0016 exactly once (per-cluster advisory lock so concurrent
 // test binaries cannot double-apply).
 func (c *Cluster) ensureMigratedDB(ctx context.Context) error {
+	return c.ensureMigratedDBFor(ctx, c.DBName)
+}
+
+// ensureMigratedDBFor provisions (create + migrate once) any named database
+// on this cluster — the RequireSharedFor machinery behind per-lane names.
+func (c *Cluster) ensureMigratedDBFor(ctx context.Context, dbName string) error {
 	conn, err := pgx.Connect(ctx, c.maintenanceDSN)
 	if err != nil {
 		return fmt.Errorf("pgtest: connect maintenance db: %w", err)
 	}
 
 	var exists bool
-	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, c.DBName).Scan(&exists); err != nil {
+	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)`, dbName).Scan(&exists); err != nil {
 		conn.Close(ctx)
 		return err
 	}
 	if !exists {
-		if _, err := conn.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", c.DBName)); err != nil {
+		if _, err := conn.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName)); err != nil {
 			conn.Close(ctx)
-			return fmt.Errorf("pgtest: create database %s: %w", c.DBName, err)
+			return fmt.Errorf("pgtest: create database %s: %w", dbName, err)
 		}
 	}
 	conn.Close(ctx)
 
-	dbDSN := c.DSN(c.DBName)
+	dbDSN := c.DSN(dbName)
 	cfg, err := pgx.ParseConfig(dbDSN)
 	if err != nil {
 		return fmt.Errorf("pgtest: parse db dsn: %w", err)
@@ -261,7 +293,7 @@ func (c *Cluster) ensureMigratedDB(ctx context.Context) error {
 	cfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
 	dbConn, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("pgtest: connect %s: %w", c.DBName, err)
+		return fmt.Errorf("pgtest: connect %s: %w", dbName, err)
 	}
 	defer dbConn.Close(ctx)
 
