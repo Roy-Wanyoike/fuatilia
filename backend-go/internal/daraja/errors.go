@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // Stable, machine-readable error codes. Callback codes mirror
@@ -57,15 +58,85 @@ const (
 	CodeDuplicateInFlight = "DARAJA_DUPLICATE_IN_FLIGHT"
 )
 
+// ErrorKind is the coarse machine-readable taxonomy (issue #84, AC7). The
+// stable Code answers "what exactly happened?"; the Kind answers "who acts
+// and how?" — alerting (auth/money), retry-with-backoff (network/upstream),
+// retry-with-fresh-deadline (timeout), dedup-aware retry (busy),
+// dead-letter (validation), or fix-the-caller (config).
+type ErrorKind string
+
+// The eight taxonomy kinds. Exhaustive by design: every *Error carries one.
+const (
+	KindAuth       ErrorKind = "auth"       // credentials/permission problem — alert, re-provision secrets
+	KindConfig     ErrorKind = "config"     // caller misuse/misconfiguration — fix the code, never retry
+	KindValidation ErrorKind = "validation" // untrusted input refused or request rejected — dead-letter, never retry
+	KindMoney      ErrorKind = "money"      // money-boundary refusal — alert finance, dead-letter
+	KindNetwork    ErrorKind = "network"    // transport/dependency failure — retry with backoff
+	KindTimeout    ErrorKind = "timeout"    // context deadline expired — retry with a fresh deadline
+	KindUpstream   ErrorKind = "upstream"   // Daraja unhealthy or contract-violating — retry with backoff, then alert
+	KindBusy       ErrorKind = "busy"       // this client's own concurrency guard — retry after the in-flight call lands
+)
+
+// kindForCode maps every stable DARAJA_* code onto the taxonomy. Total by
+// design: the default is validation because the payload-refusal families
+// dominate the code surface.
+func kindForCode(code string) ErrorKind {
+	switch code {
+	case CodeAuthFailed:
+		return KindAuth
+	case CodeConfigInvalid, CodeC2BKindRequired:
+		return KindConfig
+	case CodeAmountRequired, CodeAmountMalformed, CodeAmountNotWholeShilling,
+		CodeSTKAmountUnknown, CodeDuplicateAmountMismatch:
+		return KindMoney
+	case CodeNetworkFailed, CodeLedgerUnavailable:
+		return KindNetwork
+	case CodeDeadlineExceeded:
+		return KindTimeout
+	case CodeAPIError, CodeRetryExhausted, CodeWireMalformed:
+		return KindUpstream
+	case CodeDuplicateInFlight:
+		return KindBusy
+	default:
+		return KindValidation
+	}
+}
+
+// kindForUpstream maps a rejected Daraja response onto the taxonomy from its
+// OWN errorCode ("400.*" → validation, "401.*"/"403.*" → auth, "5*" →
+// upstream); the HTTP status decides when the body carried no errorCode.
+func kindForUpstream(status int, errorCode string) ErrorKind {
+	switch {
+	case strings.HasPrefix(errorCode, "400."):
+		return KindValidation
+	case strings.HasPrefix(errorCode, "401."), strings.HasPrefix(errorCode, "403."):
+		return KindAuth
+	case strings.HasPrefix(errorCode, "5"):
+		return KindUpstream
+	}
+	switch {
+	case status >= 500:
+		return KindUpstream
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		return KindAuth
+	default:
+		return KindValidation
+	}
+}
+
 // Error is the only error type this package returns. Code is stable and
-// machine-readable; Message is safe for logs (credentials are never
-// interpolated); HTTPStatus carries the wire status for API-error codes.
+// machine-readable; Kind is the coarse taxonomy above; Message is safe for
+// logs (credentials are never interpolated); HTTPStatus carries the wire
+// status for API-error codes; UpstreamCode carries Daraja's own errorCode
+// (e.g. "400.008.01") when its error body parsed.
 type Error struct {
-	Code       string
-	Message    string
-	HTTPStatus int  // 0 when not a wire-level error
-	Retryable  bool // true only for network/5xx families the retry policy covers
-	Cause      error
+	Code         string
+	Kind         ErrorKind
+	Message      string
+	HTTPStatus   int    // 0 when not a wire-level error
+	Retryable    bool   // true only for network/5xx families the retry policy covers
+	UpstreamCode string // Daraja's own errorCode, '' when the body carried none
+	Cause        error
 }
 
 func (e *Error) Error() string {
@@ -79,17 +150,17 @@ func (e *Error) Unwrap() error { return e.Cause }
 
 // errf builds a non-retryable *Error (payload/config/business failures).
 func errf(code, format string, args ...any) *Error {
-	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
+	return &Error{Code: code, Kind: kindForCode(code), Message: fmt.Sprintf(format, args...)}
 }
 
 // wireErr builds an *Error from an unexpected HTTP response.
 func wireErr(code string, status int, message string) *Error {
-	return &Error{Code: code, Message: message, HTTPStatus: status, Retryable: status >= 500}
+	return &Error{Code: code, Kind: kindForCode(code), Message: message, HTTPStatus: status, Retryable: status >= 500}
 }
 
 // networkErr wraps a transport-layer failure; always retryable by policy.
 func networkErr(cause error, format string, args ...any) *Error {
-	return &Error{Code: CodeNetworkFailed, Message: fmt.Sprintf(format, args...), Retryable: true, Cause: cause}
+	return &Error{Code: CodeNetworkFailed, Kind: KindNetwork, Message: fmt.Sprintf(format, args...), Retryable: true, Cause: cause}
 }
 
 // IsRetryable reports whether the retry policy may re-attempt the error.

@@ -18,6 +18,30 @@ initiation amounts, never rounded).
 | `callbacks.go` | K1 boundary: C2B validation/confirmation, STK result, B2C result → typed evidence; malformed payloads refused with their promised code |
 | `money.go` | Decimal-string → minor units (no floats), whole-shilling conversion, decimal rendering |
 
+## Error taxonomy (AC7, issue #84)
+
+Every `*daraja.Error` carries a coarse machine-readable `Kind` next to its
+stable `Code`. The Code says what exactly happened; the Kind says who acts
+and how:
+
+| Kind | Meaning | Operator reflex |
+|---|---|---|
+| `auth` | credentials/permission (OAuth refusal, 401, `401.*`/`403.*` errorCodes) | alert, re-provision secrets |
+| `config` | caller misuse/misconfiguration | fix the code — never retry |
+| `validation` | untrusted input refused or request rejected (`400.*` errorCodes, payload refusals) | dead-letter — never retry |
+| `money` | money-boundary refusal (amount shapes, whole shillings, tamper mismatch) | alert finance, dead-letter |
+| `network` | transport failure, journey ledger unavailable | retry with backoff |
+| `timeout` | context deadline expired (incl. expiry during backoff) | retry with a fresh deadline |
+| `upstream` | Daraja unhealthy or contract-violating (5xx, `5*` errorCodes, malformed response, retries exhausted) | retry with backoff, then alert |
+| `busy` | concurrent same-key initiation collapsed onto one wire call | retry after the in-flight call lands |
+
+On rejected requests the client parses Daraja's error envelope
+(`{"errorCode":"400.008.01","errorMessage":…}`, bounded 4 KiB read):
+`400.*` → `validation`, `401.*`/`403.*` → `auth`, `5*` → `upstream`; the
+HTTP status decides when the body carries no `errorCode`. Daraja's own code
+is preserved on `Error.UpstreamCode`; its `errorMessage` joins the log-safe
+`Message`.
+
 ## Environment contract
 
 | Variable | Meaning |

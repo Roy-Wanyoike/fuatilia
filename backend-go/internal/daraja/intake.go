@@ -125,6 +125,7 @@ func IntakeCallback(ctx context.Context, ledger JourneyLedger, cb ParsedCallback
 		outcome.Outcome = OutcomeRejected
 		return outcome, &Error{
 			Code:    CodeLedgerUnavailable,
+			Kind:    KindNetwork,
 			Message: "journey ledger unavailable — refusing to process blind (fail closed)",
 			Cause:   err,
 		}
@@ -142,6 +143,7 @@ func IntakeCallback(ctx context.Context, ledger JourneyLedger, cb ParsedCallback
 		outcome.Outcome = OutcomeRejected
 		return outcome, &Error{
 			Code:    CodeDuplicateAmountMismatch,
+			Kind:    KindMoney,
 			Message: "journey replayed with different money — tampering, not a retry",
 		}
 	}

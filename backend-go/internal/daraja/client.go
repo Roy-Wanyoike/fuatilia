@@ -124,7 +124,7 @@ func (c *Client) callJSON(ctx context.Context, method, path string, in any, out 
 	for {
 		if attempt > 0 {
 			if err := c.sleep(ctx, backoffDelay(c.cfg.RetryInit, c.cfg.RetryMax, attempt-1)); err != nil {
-				return &Error{Code: CodeDeadlineExceeded, Message: "retry backoff aborted: " + err.Error(), Cause: err}
+				return &Error{Code: CodeDeadlineExceeded, Kind: KindTimeout, Message: "retry backoff aborted: " + err.Error(), Cause: err}
 			}
 		}
 		lastErr := c.attemptOnce(ctx, method, path, body, out)
@@ -141,7 +141,7 @@ func (c *Client) callJSON(ctx context.Context, method, path string, in any, out 
 		}
 		attempt++
 		if attempt > c.cfg.MaxRetries {
-			return &Error{Code: CodeRetryExhausted, Message: fmt.Sprintf(
+			return &Error{Code: CodeRetryExhausted, Kind: KindUpstream, Message: fmt.Sprintf(
 				"gave up after %d attempts on %s %s: %v", attempt, method, path, lastErr), Cause: lastErr}
 		}
 	}
@@ -174,8 +174,7 @@ func (c *Client) attemptOnce(ctx context.Context, method, path string, body []by
 		c.tokens.invalidate()
 		return wireErr(CodeAuthFailed, resp.StatusCode, "unauthorized — token refreshed for next attempt")
 	case resp.StatusCode >= 400:
-		snippet, _ := safeBodySnippet(resp.Body)
-		return wireErr(CodeAPIError, resp.StatusCode, fmt.Sprintf("%s %s -> %d: %s", method, path, resp.StatusCode, snippet))
+		return c.upstreamError(resp, method, path)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -187,17 +186,43 @@ func (c *Client) attemptOnce(ctx context.Context, method, path string, body []by
 	return nil
 }
 
-// safeBodySnippet reads up to 512 bytes of an error body for diagnostics.
-func safeBodySnippet(r io.Reader) (string, error) {
-	buf := make([]byte, 512)
-	n, err := r.Read(buf)
-	if n == 0 {
-		if errors.Is(err, io.EOF) {
-			return "(empty body)", nil
-		}
-		return "", err
+// darajaErrorBody is the error envelope Daraja returns on rejected requests
+// ({"errorCode":"400.008.01","errorMessage":"..."}); both fields optional.
+type darajaErrorBody struct {
+	ErrorCode    string `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+// upstreamError turns a rejected response into a typed DARAJA_API_ERROR:
+// Daraja's own errorCode/errorMessage are parsed (bounded read) and mapped
+// onto the taxonomy — "400.*" → validation, "401.*"/"403.*" → auth, "5*" →
+// upstream; the HTTP status decides when the body carries no errorCode.
+func (c *Client) upstreamError(resp *http.Response, method, path string) *Error {
+	snippet := safeBodySnippet(resp.Body)
+	var info darajaErrorBody
+	_ = json.Unmarshal([]byte(snippet), &info) // best-effort: junk bodies fall back to status-based kinds
+
+	msg := fmt.Sprintf("%s %s -> %d", method, path, resp.StatusCode)
+	switch {
+	case info.ErrorMessage != "":
+		msg += ": " + info.ErrorMessage
+	case snippet != "(empty body)":
+		msg += ": " + snippet
 	}
-	return string(buf[:n]), nil
+	e := wireErr(CodeAPIError, resp.StatusCode, msg)
+	e.Kind = kindForUpstream(resp.StatusCode, info.ErrorCode)
+	e.UpstreamCode = info.ErrorCode
+	return e
+}
+
+// safeBodySnippet reads up to 4 KiB of an error body for diagnostics and
+// errorCode parsing — never more (the body is untrusted input).
+func safeBodySnippet(r io.Reader) string {
+	body, err := io.ReadAll(io.LimitReader(r, 4<<10))
+	if err != nil || len(body) == 0 {
+		return "(empty body)"
+	}
+	return string(body)
 }
 
 // backoffDelay computes exp backoff with full jitter, capped at max.

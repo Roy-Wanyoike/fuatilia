@@ -351,6 +351,9 @@ func TestSTKInFlightGuard(t *testing.T) {
 		}
 		var de *Error
 		if errors.As(err, &de) && de.Code == CodeDuplicateInFlight {
+			if de.Kind != KindBusy {
+				t.Errorf("duplicate refusal kind = %s, want busy", de.Kind)
+			}
 			followers++
 		}
 	}
