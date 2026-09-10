@@ -96,7 +96,7 @@ func (s *Services) Intake(ctx context.Context, orgID string, cmd IntakeCommand) 
 	err := s.Stores.RunInTx(ctx, func(tx pgx.Tx) error {
 		// R9 probe 1 (durable): the idempotency key may already name the
 		// original outcome — hot replays never re-enter the insert path.
-		if ref := s.lookupIdempotencyKey(ctx, tx, orgID, idempotencyKey); ref != "" {
+		if ref := s.lookupIdempotencyKey(ctx, tx, orgID, idempotencyScopeIntake, idempotencyKey); ref != "" {
 			prior, err := s.stores().PaymentByID(ctx, tx, orgID, ref)
 			if err == nil {
 				return s.replayDuplicate(ctx, tx, orgID, prior, cmd.AmountMinor, cmd.Currency, &result)
@@ -117,13 +117,13 @@ func (s *Services) Intake(ctx context.Context, orgID string, cmd IntakeCommand) 
 			}
 			// Bind this key to the original outcome too, so future replays
 			// carrying the same key find it through the durable registry.
-			if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyKey, prior.ID); err != nil {
+			if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyScopeIntake, idempotencyKey, prior.ID); err != nil {
 				return err
 			}
 			if err := s.appendDuplicateTripwire(ctx, tx, orgID, *prior); err != nil {
 				return err
 			}
-			s.rememberReplay(orgID, idempotencyKey, prior.ID)
+			s.rememberReplay(orgID, idempotencyScopeIntake, idempotencyKey, prior.ID)
 			result = IntakeResult{Payment: *prior, Duplicate: true}
 			return nil
 		}
@@ -143,7 +143,7 @@ func (s *Services) Intake(ctx context.Context, orgID string, cmd IntakeCommand) 
 			DeclaredRefs:   refs,
 			InitiatedAt:    s.Clock.Now(),
 		}
-		if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyKey, payment.ID); err != nil {
+		if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyScopeIntake, idempotencyKey, payment.ID); err != nil {
 			return err
 		}
 		if err := s.stores().InsertPayment(ctx, tx, payment); err != nil {
@@ -163,7 +163,7 @@ func (s *Services) Intake(ctx context.Context, orgID string, cmd IntakeCommand) 
 		}); err != nil {
 			return err
 		}
-		s.rememberReplay(orgID, idempotencyKey, payment.ID)
+		s.rememberReplay(orgID, idempotencyScopeIntake, idempotencyKey, payment.ID)
 		result = IntakeResult{Payment: payment, Duplicate: false}
 		return nil
 	})
@@ -196,13 +196,13 @@ func (s *Services) replayAfterRace(ctx context.Context, orgID, channel, external
 		if err := s.assertDuplicateMoney(*prior, amountMinor, currency); err != nil {
 			return err
 		}
-		if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyKey, prior.ID); err != nil {
+		if _, _, err := s.claimIdempotencyKey(ctx, tx, orgID, idempotencyScopeIntake, idempotencyKey, prior.ID); err != nil {
 			return err
 		}
 		if err := s.appendDuplicateTripwire(ctx, tx, orgID, *prior); err != nil {
 			return err
 		}
-		s.rememberReplay(orgID, idempotencyKey, prior.ID)
+		s.rememberReplay(orgID, idempotencyScopeIntake, idempotencyKey, prior.ID)
 		result = IntakeResult{Payment: *prior, Duplicate: true}
 		return nil
 	})
