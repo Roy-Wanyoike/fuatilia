@@ -5,6 +5,7 @@ import { OpenCasePanel } from '@/app/(dashboard)/collections/_components/open-ca
 import { CaseRecordActionPanel } from '@/app/(dashboard)/collections/_components/case-record-action-panel';
 import { CaseCompleteActionPanel } from '@/app/(dashboard)/collections/_components/case-complete-action-panel';
 import { CustomerDirectory } from '@/app/(dashboard)/customers/_components/customer-directory';
+import { CollectionsScreen } from '@/components/command-center/collections-screen';
 import { QueryProviders } from '@/providers/query-provider';
 import { createFuatiliaClient, type FetchLike } from '@/lib/api/client';
 import { caseListEmptyExample, specCase } from '@/lib/api/fixtures/collections';
@@ -105,6 +106,27 @@ describe('dashboard rendering in Kiswahili (#180)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('empty-state')).toHaveTextContent('Hakuna shughuli za wateja bado');
     });
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the Command Center chrome in sw while the read models are pending', () => {
+    // Never-answering fetch: the pending path is the cheapest real render —
+    // h1, subtitle and the labelled retry control, all in Kiswahili.
+    const neverFetch: FetchLike = () => new Promise<Response>(() => undefined);
+    vi.stubGlobal('fetch', neverFetch);
+    const client = createFuatiliaClient({
+      baseUrl: 'http://dashboard.test',
+      fetchImpl: neverFetch,
+      logger: null,
+      requestIdGenerator: () => 'test-req-1',
+    });
+    renderInSw(<CollectionsScreen client={client} />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Kituo cha Amri cha Makusanyi' }));
+    expect(screen.getByText('Timu yangu ya makusanyi ifanye nini sasa hivi?'));
+    // With a never-answering wire the queries stay in flight, so refresh is
+    // honestly disabled (the a11y suite pins the enabled state separately).
+    expect(screen.getByRole('button', { name: 'Onyesha upya' })).toBeDisabled();
     vi.unstubAllGlobals();
   });
 });

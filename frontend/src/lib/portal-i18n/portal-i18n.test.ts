@@ -196,6 +196,36 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
     ).toBe('applied to receivable rcv-1');
     expect(translate(en, 'dashboard.customers.c360.overdueBadge')).toBe('overdue');
     expect(translate(en, 'dashboard.customers.c360.promises.dueNow')).toBe('due now');
+    // Command Center — the a11y suite pins the h1, every card title and the
+    // refresh control; the component tests pin the empty-state titles.
+    expect(translate(en, 'dashboard.commandCenter.title')).toBe('Collections Command Center');
+    expect(translate(en, 'dashboard.commandCenter.refresh')).toBe('Refresh');
+    expect(translate(en, 'dashboard.commandCenter.derivationLabel')).toBe('derivation:');
+    expect(translate(en, 'dashboard.commandCenter.cards.expectedToday.cardTitle')).toBe(
+      'Expected collections today',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.atRisk.cardTitle')).toBe('At-risk');
+    expect(translate(en, 'dashboard.commandCenter.cards.opportunities.cardTitle')).toBe(
+      'High-value opportunities',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.expectedToday.subsetEmptyTitle')).toBe(
+      'Nothing falls due today',
+    );
+    expect(translate(en, 'dashboard.commandCenter.cards.overdue.subsetEmptyTitle')).toBe(
+      'Nothing is overdue',
+    );
+    expect(
+      translate(en, 'dashboard.commandCenter.cards.overdue.bucketLabel', {
+        bucket: '61-90',
+        count: 2,
+      }),
+    ).toBe('61-90: 2');
+    expect(
+      translate(en, 'dashboard.commandCenter.cards.opportunities.footerTotal', {
+        count: 5,
+        book: 'KES 75,000.00',
+      }),
+    ).toBe('Top 5 by outstanding balance — total book KES 75,000.00');
   });
 
   it('auth strings that component tests pin resolve byte-identically', () => {
@@ -234,6 +264,14 @@ describe('adoption byte-identity (issue #180 — en copy pinned verbatim)', () =
         when: '2026-09-02 12:00',
       }),
     ).toBe('Simu — imepangwa 2026-09-02 12:00');
+    expect(translate(sw, 'dashboard.commandCenter.title')).toBe('Kituo cha Amri cha Makusanyi');
+    expect(translate(sw, 'dashboard.commandCenter.cards.overdue.cardTitle')).toBe('Zilizochelewa');
+    expect(
+      translate(sw, 'dashboard.commandCenter.cards.overdue.bucketLabel', {
+        bucket: '61-90',
+        count: 2,
+      }),
+    ).toBe('61-90: 2');
     expect(translate(sw, 'dashboard.customers.directory.title')).toBe('Wateja');
     expect(translate(sw, 'auth.signIn.title')).toBe('Ingia kwenye Fuatilia');
     expect(translate(sw, 'auth.signOut.submit')).toBe('Toka');

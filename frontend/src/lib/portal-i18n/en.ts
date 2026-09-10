@@ -224,6 +224,130 @@ export const en = {
       },
     },
 
+    commandCenter: {
+      title: 'Collections Command Center',
+      subtitle: 'What should my collections team do right now?',
+      asOf: 'derived for {day} (Africa/Nairobi)',
+      refresh: 'Refresh',
+      truncatedNote:
+        'Large dataset: the read path stopped at the payload-conscious page cap, so totals cover the fetched rows only. Server-side aggregation is roadmap (README "Card derivations").',
+      /** The CommandCard footer prefix; the derivation itself names the contract. */
+      derivationLabel: 'derivation:',
+      metric: {
+        mixedCurrencies: 'mixed currencies — count only (R10: no cross-currency totals)',
+        rangeOverflow: 'total beyond exact integer range — count only (money never rounds)',
+      },
+      cards: {
+        expectedToday: {
+          cardTitle: 'Expected collections today',
+          question: 'Which balances fall due today?',
+          derivation:
+            'GET /v1/receivables — balance of open|partially_paid rows with dueDate = today',
+          errorTitle: 'Expected collections today is unavailable',
+          sourceEmptyTitle: 'No receivables on this deployment yet',
+          sourceEmptyDescription:
+            'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
+          subsetEmptyTitle: 'Nothing falls due today',
+          subsetEmptyDescription:
+            'No outstanding receivable has a due date of today (Africa/Nairobi).',
+          subsetEmptyHint: 'Receivables are fetched sorted by due date ascending.',
+          totalLabel: 'outstanding balance due today',
+        },
+        overdue: {
+          cardTitle: 'Overdue',
+          question: 'How much money is past due, and how deep?',
+          derivation:
+            'GET /v1/receivables — overdue flag + aging buckets of open|partially_paid rows',
+          errorTitle: 'Overdue exposure is unavailable',
+          sourceEmptyTitle: 'No receivables on this deployment yet',
+          sourceEmptyDescription:
+            'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
+          subsetEmptyTitle: 'Nothing is overdue',
+          subsetEmptyDescription: "No receivable carries the lane's overdue flag.",
+          totalLabel: 'overdue balance',
+          bucketLabel: '{bucket}: {count}',
+        },
+        atRisk: {
+          cardTitle: 'At-risk',
+          question: 'Which balances are deep in the aging ladder?',
+          derivation:
+            'GET /v1/receivables — aging bucket ∈ {61-90, 90+} of open|partially_paid rows',
+          errorTitle: 'At-risk exposure is unavailable',
+          sourceEmptyTitle: 'No receivables on this deployment yet',
+          sourceEmptyDescription:
+            'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
+          subsetEmptyTitle: 'Nothing is deep-aged',
+          subsetEmptyDescription:
+            'No receivable sits in the 61–90 or 90+ aging buckets — the at-risk definition for v1.',
+          subsetEmptyHint: 'Risk-scoring engine (SPEC §25) refines this definition on the roadmap.',
+          totalLabel: 'aged 61–90 / 90+ days',
+        },
+        promisesDue: {
+          cardTitle: 'Promises due',
+          question: 'Which customers have promised money, and whose follow-up is due?',
+          derivation:
+            "GET /v1/collections/cases — live cases with derivedStatus 'promised'; due-now = uncompleted action scheduled ≤ today",
+          errorTitle: 'Promise tracking is unavailable',
+          sourceEmptyTitle: 'No collections cases yet',
+          sourceEmptyDescription:
+            'GET /v1/collections/cases returned an empty first page — open a case to start tracking.',
+          subsetEmptyTitle: 'No live promised cases',
+          subsetEmptyDescription:
+            'No live case (open / in_progress) currently derives the promised overlay.',
+          subsetEmptyHint: 'The dedicated promise read model (amount + due date) is roadmap.',
+          dueNowSuffix: 'with a follow-up due today or earlier',
+        },
+        missedPromises: {
+          cardTitle: 'Missed promises',
+          question: 'Which promised follow-ups slipped past their scheduled day?',
+          derivation:
+            'GET /v1/collections/cases — promised cases with an uncompleted action scheduled before today',
+          errorTitle: 'Missed-promise tracking is unavailable',
+          sourceEmptyTitle: 'No collections cases yet',
+          sourceEmptyDescription:
+            'GET /v1/collections/cases returned an empty first page — open a case to start tracking.',
+          subsetEmptyTitle: 'No missed promises',
+          subsetEmptyDescription:
+            'No promised case carries a follow-up action still uncompleted after its scheduled day.',
+        },
+        unmatchedPayments: {
+          cardTitle: 'Unmatched payments',
+          question: 'Whose cash landed but is not applied to an invoice yet?',
+          derivation:
+            'GET /v1/payments — confirmed ≠ null and unapplied > 0; total = Σ unapplied',
+          errorTitle: 'Unmatched-payment tracking is unavailable',
+          sourceEmptyTitle: 'No payments on this deployment yet',
+          sourceEmptyDescription:
+            'The /v1/payments read model returned an empty first page. Money arrives through the Daraja intake funnel.',
+          subsetEmptyTitle: 'No unapplied confirmed cash',
+          subsetEmptyDescription:
+            'Every confirmed payment is fully allocated — nothing is waiting to be matched.',
+          totalLabel: 'confirmed but unapplied',
+        },
+        opportunities: {
+          cardTitle: 'High-value opportunities',
+          question: 'Where is the biggest collectable money right now?',
+          derivation:
+            'GET /v1/receivables — top 5 open|partially_paid rows ranked by balance (integer minor units)',
+          errorTitle: 'High-value opportunities are unavailable',
+          sourceEmptyTitle: 'No receivables on this deployment yet',
+          sourceEmptyDescription:
+            'The /v1/receivables read model returned an empty first page. Rows arrive through the invoicing flow.',
+          subsetEmptyTitle: 'No outstanding balances to chase',
+          subsetEmptyDescription: 'No receivable is in an outstanding state (open / partially_paid).',
+          tableLabel: 'High-value opportunities',
+          overdueBadge: 'overdue',
+          footerTotal: 'Top {count} by outstanding balance — total book {book}',
+          bookCountOnly: 'spans currencies (count only)',
+          col: {
+            customer: 'Customer',
+            balance: 'Balance',
+            aging: 'Aging',
+          },
+        },
+      },
+    },
+
     collections: {
       /** Human labels for the case state machine (bound via Record maps). */
       statusLabels: {

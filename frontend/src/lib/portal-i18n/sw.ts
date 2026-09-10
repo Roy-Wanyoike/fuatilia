@@ -208,6 +208,130 @@ export const sw = {
       },
     },
 
+    commandCenter: {
+      title: 'Kituo cha Amri cha Makusanyi',
+      subtitle: 'Timu yangu ya makusanyi ifanye nini sasa hivi?',
+      asOf: 'imetokanishwa kwa {day} (Africa/Nairobi)',
+      refresh: 'Onyesha upya',
+      truncatedNote:
+        'Data kubwa: njia ya kusoma iliacha kwenye kikomo cha ukurasa, hivyo jumla zinashughulikia safu zilizopakiwa tu. Uhalisia wa jumla upande wa seva ni mpangilio wa kazi (README "Card derivations").',
+      /** Kiambishi cha mguu wa CommandCard; utokaji mwenyewe huita mkataba. */
+      derivationLabel: 'utokaji:',
+      metric: {
+        mixedCurrencies: 'sarafu mchanganyiko — idadi tu (R10: hakuna jumla za sarafu mbalimbali)',
+        rangeOverflow: 'jumla imezidi upeo sahihi wa namba — idadi tu (pesa haikaribishwi kamwe)',
+      },
+      cards: {
+        expectedToday: {
+          cardTitle: 'Makusanyo yanayotarajiwa leo',
+          question: 'Mabaki gani yanaisha muda wake leo?',
+          derivation:
+            'GET /v1/receivables — salio la safu open|partially_paid zenye dueDate = leo',
+          errorTitle: 'Makusanyo yanayotarajiwa leo hayapatikani',
+          sourceEmptyTitle: 'Hakuna madeni kwenye uanzishaji huu bado',
+          sourceEmptyDescription:
+            'Kisomeleaji cha GET /v1/receivables kilirudisha ukurasa wa kwanza mtupu. Safu huingia kupitia mtiririko wa bili.',
+          subsetEmptyTitle: 'Hakuna kinachoisha muda wake leo',
+          subsetEmptyDescription:
+            'Hakuna deni lisilolipwa lenye dueDate ya leo (Africa/Nairobi).',
+          subsetEmptyHint: 'Madeni hupatikana yamepangwa kwa dueDate kutoka ya kwanza.',
+          totalLabel: 'salio lisilolipwa linaloisha muda wake leo',
+        },
+        overdue: {
+          cardTitle: 'Zilizochelewa',
+          question: 'Pesa ngapi zimechelewa, na zimechelewa kwa kina gani?',
+          derivation:
+            'GET /v1/receivables — bendera ya uchelewaji + vikapu vya umri wa deni vya safu open|partially_paid',
+          errorTitle: 'Ufunuo wa uchelewaji haupatikani',
+          sourceEmptyTitle: 'Hakuna madeni kwenye uanzishaji huu bado',
+          sourceEmptyDescription:
+            'Kisomeleaji cha GET /v1/receivables kilirudisha ukurasa wa kwanza mtupu. Safu huingia kupitia mtiririko wa bili.',
+          subsetEmptyTitle: 'Hakuna kilichochelewa',
+          subsetEmptyDescription: 'Hakuna deni lenye bendera ya uchelewaji wa njia hii.',
+          totalLabel: 'salio lililochelewa',
+          bucketLabel: '{bucket}: {count}',
+        },
+        atRisk: {
+          cardTitle: 'Hatarini',
+          question: 'Mabaki gani yamekaa kina cha ngazi ya umri wa deni?',
+          derivation:
+            'GET /v1/receivables — kikapu cha umri wa deni ∈ {61-90, 90+} cha safu open|partially_paid',
+          errorTitle: 'Ufunuo wa hatarini haupatikani',
+          sourceEmptyTitle: 'Hakuna madeni kwenye uanzishaji huu bado',
+          sourceEmptyDescription:
+            'Kisomeleaji cha GET /v1/receivables kilirudisha ukurasa wa kwanza mtupu. Safu huingia kupitia mtiririko wa bili.',
+          subsetEmptyTitle: 'Hakuna kilichokaa kina',
+          subsetEmptyDescription:
+            'Hakuna deni lililoko vikapuni 61–90 au 90+ vya umri wa deni — ufafanuzi wa hatarini kwa v1.',
+          subsetEmptyHint: 'Injini ya kupima hatari (SPEC §25) itaboresha ufafanuzi huu kesho.',
+          totalLabel: 'yaliyokaa kina siku 61–90 / 90+',
+        },
+        promisesDue: {
+          cardTitle: 'Ahadi zinazofika muda wake',
+          question: 'Wateja gani wameahidi pesa, na ufuatilio wa nani umefika?',
+          derivation:
+            "GET /v1/collections/cases — kesa hai zenye derivedStatus 'promised'; due-now = hatua isiyokamilika iliyopangwa ≤ leo",
+          errorTitle: 'Ufuatiliaji wa ahadi haupatikani',
+          sourceEmptyTitle: 'Hakuna kesa za makusanyi bado',
+          sourceEmptyDescription:
+            'GET /v1/collections/cases ilirudisha ukurasa wa kwanza mtupu — fungua kesa ili kuanza kufuatilia.',
+          subsetEmptyTitle: 'Hakuna kesa zenye ahadi hai',
+          subsetEmptyDescription:
+            'Hakuna kesa hai (open / in_progress) inayotokana na overlay ya ahadi kwa sasa.',
+          subsetEmptyHint: 'Kisomeleaji maalum cha ahadi (kiasi + tarehe) ni mpangilio wa kazi.',
+          dueNowSuffix: 'na ufuatilio uliofika muda wake au kabla',
+        },
+        missedPromises: {
+          cardTitle: 'Ahadi zilizopita',
+          question: 'Ahadi za nini zilipita siku yake ya ufuatilio?',
+          derivation:
+            'GET /v1/collections/cases — kesa zenye ahadi zenye hatua isiyokamilika iliyopangwa kabla ya leo',
+          errorTitle: 'Ufuatiliaji wa ahadi zilizopita haupatikani',
+          sourceEmptyTitle: 'Hakuna kesa za makusanyi bado',
+          sourceEmptyDescription:
+            'GET /v1/collections/cases ilirudisha ukurasa wa kwanza mtupu — fungua kesa ili kuanza kufuatilia.',
+          subsetEmptyTitle: 'Hakuna ahadi zilizopita',
+          subsetEmptyDescription:
+            'Hakuna kesa yenye ahadi inayobeba hatua ya ufuatilio isiyokamilika baada ya siku yake.',
+        },
+        unmatchedPayments: {
+          cardTitle: 'Malipo yasiyolinganishwa',
+          question: 'Pesa ya nani ilifika lakini haijatumika kwenye ankara bado?',
+          derivation:
+            'GET /v1/payments — confirmed ≠ null na unapplied > 0; jumla = Σ isiyotumika',
+          errorTitle: 'Ufuatiliaji wa malipo yasiyolinganishwa haupatikani',
+          sourceEmptyTitle: 'Hakuna malipo kwenye uanzishaji huu bado',
+          sourceEmptyDescription:
+            'Kisomeleaji cha GET /v1/payments kilirudisha ukurasa wa kwanza mtupu. Pesa huingia kupitia njia ya ingizo ya Daraja.',
+          subsetEmptyTitle: 'Hakuna pesa iliyothibitishwa isiyotumika',
+          subsetEmptyDescription:
+            'Kila malipo yaliyothibitishwa yametumikwa kikamilifu — hakuna kinachosubiri kulinganishwa.',
+          totalLabel: 'yaliyothibitishwa bila kutumika',
+        },
+        opportunities: {
+          cardTitle: 'Fursa za thamani kubwa',
+          question: 'Pesa kubwa ya kukusanya iko wapi sasa hivi?',
+          derivation:
+            'GET /v1/receivables — safu 5 za juu open|partially_paid zilizoratibiwa kwa salio (vitu vidogo vya namba)',
+          errorTitle: 'Fursa za thamani kubwa hazipatikani',
+          sourceEmptyTitle: 'Hakuna madeni kwenye uanzishaji huu bado',
+          sourceEmptyDescription:
+            'Kisomeleaji cha GET /v1/receivables kilirudisha ukurasa wa kwanza mtupu. Safu huingia kupitia mtiririko wa bili.',
+          subsetEmptyTitle: 'Hakuna mabaki ya kufuatilia',
+          subsetEmptyDescription: 'Hakuna deni lililoko kwenye hali ya kutolipwa (open / partially_paid).',
+          tableLabel: 'Fursa za thamani kubwa',
+          overdueBadge: 'imechelewa',
+          footerTotal: '{count} za juu kwa salio lisilolipwa — kitabu chote {book}',
+          bookCountOnly: 'inasarafu mbalimbali (idadi tu)',
+          col: {
+            customer: 'Mteja',
+            balance: 'Salio',
+            aging: 'Umri wa deni',
+          },
+        },
+      },
+    },
+
     collections: {
       statusLabels: {
         open: 'Iliyofunguliwa',
