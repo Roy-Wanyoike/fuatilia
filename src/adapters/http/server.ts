@@ -31,6 +31,8 @@ import { healthRoute, metaRoute } from './routes/public';
 import { receivablesRoutes } from './routes/receivables';
 import { paymentsRoutes } from './routes/payments';
 import { collectionsRoutes } from './routes/collections';
+import { ledgerRoutes } from './routes/ledger';
+import { adjustmentsRoutes } from './routes/adjustments';
 
 export interface HttpKernelOptions {
   /** Injected clock (default: system). Feeds every audited denial timestamp. */
@@ -43,7 +45,9 @@ export interface HttpKernelOptions {
   readonly store?: AuthStore;
   /**
    * Resource state for the mounted /v1/payments|receivables|collections
-   * tables (issue #60; default: a fresh empty in-memory store).
+   * tables (issue #60; default: a fresh empty in-memory store). The ledger
+   * + adjustments read/intent surface (issue #132) derives its views from
+   * the same store — no extra state.
    */
   readonly resourceStore?: ResourceStore;
   /** Observability sink for internal errors — never the response body. */
@@ -88,6 +92,8 @@ export function createHttpKernel(options: HttpKernelOptions = {}): HttpKernel {
     ...receivablesRoutes({ store: resources, clock, idGen }),
     ...paymentsRoutes({ store: resources, clock, idGen }),
     ...collectionsRoutes({ store: resources, clock, idGen }),
+    ...ledgerRoutes({ store: resources, clock, idGen }),
+    ...adjustmentsRoutes({ store: resources, clock, idGen }),
   ];
   const capabilities = [
     ...new Set(

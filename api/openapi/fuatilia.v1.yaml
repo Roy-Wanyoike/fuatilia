@@ -2,10 +2,11 @@
 # FuatiliA — /v1 machine-readable contract (issue #67, wave 9 "Production W1")
 # =============================================================================
 # Documents EXACTLY what is mounted today on the HTTP kernel
-# (src/adapters/http/ — issues #55/#60). NOTHING here is aspirational:
+# (src/adapters/http/ — issues #55/#60/#132). NOTHING here is aspirational:
 # every path/method below is a row in a real route table
 # (routes/public.ts, routes/auth.ts, routes/receivables.ts,
-# routes/payments.ts, routes/collections.ts — 22 operations over 21 paths).
+# routes/payments.ts, routes/collections.ts, routes/ledger.ts,
+# routes/adjustments.ts — 27 operations over 26 paths).
 #
 # Wire rules derived from kernel/kernel.ts (do not guess, read the source):
 #   - Every response carries `x-request-id` (echoed from the request's
@@ -1593,6 +1594,341 @@ paths:
         '413': {$ref: '#/components/responses/PayloadTooLarge'}
         '500': {$ref: '#/components/responses/InternalError'}
 
+  # ===========================================================================
+  # /v1/ledger — routes/ledger.ts (issue #132)
+  #   the append-only GL read surface (R3/R4). READ-ONLY by contract: no
+  #   operation on /v1 mutates ledger truth — rows arrive only through the
+  #   lanes' posting flows (e.g. payment confirmations, R5 posting matrix).
+  # ===========================================================================
+
+  /v1/ledger/accounts:
+    get:
+      tags: [Ledger]
+      operationId: listLedgerAccounts
+      summary: List the org's chart of accounts (paginated).
+      description: >
+        Requires `ledger:read`. Org-scoped: only the authenticated principal's
+        org's accounts are visible (foreign-org rows never leak). The reference
+        composition derives the chart exactly where the posting flow seeds it —
+        the per-currency cash / accounts-receivable pair created with the first
+        confirmed payment (see repositories.EnsureConfirmationLedgerSeed) — and
+        a persistence adapter swaps in the real ledger_accounts rows behind the
+        same contract. Sort whitelist: `id`, `code`, `kind`, `currency`.
+      x-required-permission: ledger:read
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/LedgerAccountSort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of ledger account views.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LedgerAccountListResponse'}
+              example:
+                data:
+                  accounts:
+                    - id: cash-KES
+                      code: cash-KES
+                      name: Mobile Money Cash (KES)
+                      kind: asset
+                      currency: KES
+                    - id: ar-KES
+                      code: ar-KES
+                      name: Accounts Receivable (KES)
+                      kind: asset
+                      currency: KES
+                meta:
+                  pagination:
+                    nextCursor: null
+                    total: 2
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+
+  /v1/ledger/entries:
+    get:
+      tags: [Ledger]
+      operationId: listLedgerEntries
+      summary: List the append-only journal, one row per line (paginated).
+      description: >
+        Requires `ledger:read`. Org-scoped, integer minor units (R10) and
+        `DEBIT`/`CREDIT` directions as magnitudes (the direction carries the
+        sign — a negative line is a modelling bug the ledger refuses, R3/R4).
+        Every entry's Σ(debits) == Σ(credits) in ONE currency — proven at
+        COMMIT by the posting flow; corrections are compensating entries
+        carrying `reversalOf`, never edits (R3). Deterministic default order:
+        postedAt, then entryId, then lineNo. Sort whitelist: `id`, `postedAt`,
+        `source`.
+      x-required-permission: ledger:read
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/LedgerEntrySort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of journal line views.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LedgerEntryListResponse'}
+              example:
+                data:
+                  entries:
+                    - entryId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                      lineNo: 1
+                      accountCode: cash-KES
+                      accountKind: asset
+                      direction: DEBIT
+                      amount: {minor: 750000, currency: KES}
+                      source: payments
+                      sourceRef: SBK41XQ7RT
+                      journalRef: 'payment_confirmed:8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a'
+                      postedAt: '2026-09-04T10:01:30.000Z'
+                      reversalOf: null
+                    - entryId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                      lineNo: 2
+                      accountCode: ar-KES
+                      accountKind: asset
+                      direction: CREDIT
+                      amount: {minor: 750000, currency: KES}
+                      source: payments
+                      sourceRef: SBK41XQ7RT
+                      journalRef: 'payment_confirmed:8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a'
+                      postedAt: '2026-09-04T10:01:30.000Z'
+                      reversalOf: null
+                meta:
+                  pagination:
+                    nextCursor: null
+                    total: 2
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+
+  # ===========================================================================
+  # /v1/adjustments — routes/adjustments.ts (issue #132)
+  #   the adjustments feed + the two INTENT evaluators. The intent endpoints
+  #   are DRY-RUN evaluators: they run the adjustments lane's refusal tables
+  #   (src/domain/adjustments/{credit-note,refund}.ts) against the proposal
+  #   and answer 200 with the validation refusals AS VALUES in the body —
+  #   NOTHING is persisted and NO ledger row is appended (R3/R6/R7: the write
+  #   path belongs to the lane's own aggregate lifecycle). Only JSON-SHAPE
+  #   violations are transport 400s.
+  # ===========================================================================
+
+  /v1/adjustments:
+    get:
+      tags: [Adjustments]
+      operationId: listAdjustments
+      summary: List the org's adjustments feed — refunds + credit notes (paginated).
+      description: >
+        Requires `adjustments:request` (the closed vocabulary's adjustments
+        read grant — docs/API_STATUS.md assigns this family to
+        adjustments:request / adjustments:approve). Org-scoped discriminated
+        feed: every live refund (the Refund aggregate, kind `refund`) and
+        credit note (kind `credit_note`) of the authenticated principal's org
+        — foreign-org rows never leak. Sort whitelist: `id`, `kind`, `state`,
+        `createdAt`.
+      x-required-permission: adjustments:request
+      parameters:
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/AdjustmentSort'}
+        - {$ref: '#/components/parameters/Order'}
+      responses:
+        '200':
+          description: One page of the adjustments feed.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdjustmentListResponse'}
+              example:
+                data:
+                  adjustments:
+                    - kind: refund
+                      id: 9a8b7c6d-5e4f-4321-8ab0-998877665544
+                      paymentId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                      requestedBy: 00000000-0000-4000-8000-000000000902
+                      reason: duplicate deposit — refunding the overpayment
+                      total: {minor: 250000, currency: KES}
+                      state: requested
+                      externalRef: null
+                      rejectedReason: null
+                      failedReason: null
+                      createdAt: '2026-09-04T10:05:00.000Z'
+                meta:
+                  pagination:
+                    nextCursor: null
+                    total: 1
+        '400': {$ref: '#/components/responses/QueryInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+
+  /v1/adjustments/credit-notes:
+    post:
+      tags: [Adjustments]
+      operationId: evaluateCreditNoteIntent
+      summary: Evaluate a draft-credit-note INTENT (dry run — refusals as values).
+      description: >
+        Requires `adjustments:request`. Runs the adjustments lane's
+        draft-credit-note refusal table (src/domain/adjustments/credit-note.ts,
+        `draftCreditNote`) against the proposal and answers **200** with
+        `accepted` plus the validation refusals AS STRUCTURED VALUES —
+        `CREDIT_NOTE_REASON_REQUIRED` (blank reason) and
+        `CREDIT_NOTE_TOTAL_INVALID` (total not positive, docs/05). Value
+        refusals are collected (a proposal can fail several guards at once);
+        they never become HTTP errors and NOTHING is persisted — the ledger
+        and the credit_notes store are untouched (R3/R7). Only JSON-shape
+        violations (non-string reason, non-integer minor, currency outside
+        the closed list) refuse with 400 `HTTP_BODY_INVALID`. On acceptance
+        the response carries the evaluated draft intent (`state: 'draft'`,
+        id minted by the kernel's id port) — a proposal, not a row.
+      x-required-permission: adjustments:request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreditNoteIntentBody'}
+            example:
+              customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+              invoiceId: 0f1e2d3c-4b5a-4968-8776-6554433221ff
+              reason: goods returned — partial delivery shortfall
+              total: {minor: 250000, currency: KES}
+      responses:
+        '200':
+          description: >
+            The evaluated intent — `accepted: true` with the draft (nothing
+            stored), or `accepted: false` with the domain's refusals as values.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreditNoteIntentResponse'}
+              examples:
+                accepted:
+                  summary: A valid draft proposal.
+                  value:
+                    data:
+                      intent:
+                        id: 2b3c4d5e-6f70-4a1b-8c2d-3e4f5a6b7c8d
+                        customerId: 11a2b3c4-d5e6-4789-8a0b-1c2d3e4f5a6b
+                        invoiceId: 0f1e2d3c-4b5a-4968-8776-6554433221ff
+                        reason: goods returned — partial delivery shortfall
+                        total: {minor: 250000, currency: KES}
+                        state: draft
+                      accepted: true
+                      refusals: []
+                refused:
+                  summary: The lane refuses — refusals come back as values.
+                  value:
+                    data:
+                      intent: null
+                      accepted: false
+                      refusals:
+                        - code: CREDIT_NOTE_REASON_REQUIRED
+                          message: a credit note requires a reason
+                          field: reason
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
+  /v1/adjustments/refund-reservations:
+    post:
+      tags: [Adjustments]
+      operationId: evaluateRefundReservationIntent
+      summary: Evaluate a refund INTENT against the R6 ceiling (dry run — refusals as values).
+      description: >
+        Requires `adjustments:request`. Runs the adjustments lane's refund
+        refusal table (src/domain/adjustments/refund.ts, `requestRefund`)
+        against the proposal, computing the R6 ceiling from the org-scoped
+        payment snapshot: confirmed − Σ(active allocations) − Σ(live refunds)
+        (an unconfirmed payment has nothing landed → ceiling 0). Answers
+        **200** with `accepted` plus the validation refusals AS STRUCTURED
+        VALUES — `REFUND_REASON_REQUIRED`, `REFUND_REQUESTER_REQUIRED`
+        (defaults to the authenticated principal when the body omits it),
+        `REFUND_AMOUNT_INVALID` (not positive), `CURRENCY_MISMATCH` (the
+        ceiling comparison refuses cross-currency before it can succeed,
+        R10) and `REFUND_EXCEEDS_CEILING` (R6). Value refusals never become
+        HTTP errors and NOTHING is persisted — no refunds row, no ledger
+        entry (R3/R6). Only JSON-shape violations refuse with 400
+        `HTTP_BODY_INVALID`; an unknown payment answers 404
+        `HTTP_PAYMENT_NOT_FOUND` (existence is never leaked across orgs).
+      x-required-permission: adjustments:request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefundIntentBody'}
+            example:
+              paymentId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+              amount: {minor: 250000, currency: KES}
+              reason: duplicate deposit — refunding the overpayment
+      responses:
+        '200':
+          description: >
+            The evaluated intent — `accepted: true` with the proposed
+            Requested refund and the ceiling it was evaluated against
+            (nothing stored), or `accepted: false` with the refusals as values.
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RefundIntentResponse'}
+              examples:
+                accepted:
+                  summary: The proposal fits under the R6 ceiling.
+                  value:
+                    data:
+                      intent:
+                        id: 3c4d5e6f-7081-4a2b-8d3c-4e5f6a7b8c9d
+                        paymentId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+                        requestedBy: 00000000-0000-4000-8000-000000000902
+                        reason: duplicate deposit — refunding the overpayment
+                        total: {minor: 250000, currency: KES}
+                        state: requested
+                        ceiling: {minor: 500000, currency: KES}
+                      accepted: true
+                      refusals: []
+                refused:
+                  summary: The R6 ceiling refused — the refusal is a value.
+                  value:
+                    data:
+                      intent: null
+                      accepted: false
+                      refusals:
+                        - code: REFUND_EXCEEDS_CEILING
+                          message: refund 7500.01 KES exceeds ceiling 5000.00 KES
+                          field: amount
+                          details:
+                            requestedMinor: 750001
+                            ceilingMinor: 500000
+                            paymentId: 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a
+        '400': {$ref: '#/components/responses/BodyInvalid'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/AccessDenied'}
+        '404':
+          description: No payment carries the id (`HTTP_PAYMENT_NOT_FOUND`).
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+              example:
+                error:
+                  code: HTTP_PAYMENT_NOT_FOUND
+                  message: payment 8d9e0f1a-2b3c-4d5e-8f6a-7b8c9d0e1f2a does not exist
+                requestId: 9f2c1b3a-4d5e-4f60-8a71-2b3c4d5e6f70
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
 # =============================================================================
 # Components
 # =============================================================================
@@ -1675,6 +2011,21 @@ components:
       in: query
       description: Sort field — whitelisted per resource; anything else is a 400.
       schema: {type: string, enum: [id, caseNumber, priority, status]}
+    LedgerAccountSort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, code, kind, currency]}
+    LedgerEntrySort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, postedAt, source]}
+    AdjustmentSort:
+      name: sort
+      in: query
+      description: Sort field — whitelisted per resource; anything else is a 400.
+      schema: {type: string, enum: [id, kind, state, createdAt]}
     ReceivableId:
       name: receivableId
       in: path
@@ -2561,6 +2912,309 @@ components:
           type: string
           format: uuid
           description: Optional completing principal override (validated UUID).
+
+    # ---- ledger + adjustments (issue #132) -------------------------------------
+
+    LedgerAccountView:
+      type: object
+      description: >
+        One chart-of-accounts row. `id` is the account's stable identifier —
+        the PG read model carries the surrogate ledger_accounts.id, the
+        reference composition keys the derived chart by `code` (the account's
+        business identity is (org, code)).
+      required: [id, code, name, kind, currency]
+      properties:
+        id: {type: string}
+        code: {type: string}
+        name: {type: string}
+        kind:
+          type: string
+          description: The account kind (ck_ledger_accounts_kind).
+          enum: [asset, liability, equity, income, expense]
+        currency: {$ref: '#/components/schemas/Currency'}
+
+    LedgerAccountListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [accounts]
+          properties:
+            accounts:
+              type: array
+              items: {$ref: '#/components/schemas/LedgerAccountView'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
+
+    LedgerEntryLineView:
+      type: object
+      description: >
+        One journal LINE (the append-only read model is line-grained). The
+        entry's Σ(debits) == Σ(credits) in one currency (R4); a reversing
+        entry references its original via `reversalOf` and flips the lines —
+        history keeps every version, nothing is ever edited (R3).
+      required: [entryId, lineNo, accountCode, accountKind, direction, amount, source, journalRef, postedAt, reversalOf]
+      properties:
+        entryId: {type: string}
+        lineNo:
+          type: integer
+          description: The line's 1-based position inside its entry.
+          minimum: 1
+        accountCode: {type: string}
+        accountKind:
+          type: string
+          enum: [asset, liability, equity, income, expense]
+        direction:
+          type: string
+          description: The PostingDirection — amounts are magnitudes (accounts.ts).
+          enum: [DEBIT, CREDIT]
+        amount: {$ref: '#/components/schemas/Money'}
+        source:
+          type: string
+          description: The producing flow's posting-matrix source (e.g. `payments`).
+        sourceRef:
+          type: [string, 'null']
+          description: The flow's own reference (Daraja ref, invoice number…).
+        journalRef:
+          type: string
+          description: >
+            The idempotent replay key of the entry (UNIQUE (org, journal_ref,
+            line_no) — a replay can never double-post, R9's ledger face).
+        postedAt: {type: string, format: date-time}
+        reversalOf:
+          type: [string, 'null']
+          description: The entry id this entry corrects, when it IS a reversal.
+
+    LedgerEntryListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [entries]
+          properties:
+            entries:
+              type: array
+              items: {$ref: '#/components/schemas/LedgerEntryLineView'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
+
+    CreditNoteIntentBody:
+      type: object
+      description: >
+        A draft-credit-note PROPOSAL. Shape rules only here — the value rules
+        (blank reason, non-positive total) are the lane's refusal table and
+        come back as refusal VALUES on 200.
+      required: [customerId, reason, total]
+      properties:
+        customerId: {type: string, format: uuid}
+        invoiceId:
+          type: string
+          format: uuid
+          description: Optional invoice linkage.
+        reason:
+          type: string
+          description: >
+            The audit trail. Blankness is NOT a shape error — the lane refuses
+            it as a CREDIT_NOTE_REASON_REQUIRED refusal value.
+        total: {$ref: '#/components/schemas/Money'}
+        # NOTE: `total.minor` may carry 0/negative — a non-positive total is
+        # the lane's CREDIT_NOTE_TOTAL_INVALID refusal value, not a 400. The
+        # Money schema's >= 0 floor documents the healthiest proposals; the
+        # kernel still evaluates anything shape-legal.
+
+    RefundIntentBody:
+      type: object
+      description: >
+        A refund PROPOSAL evaluated against the R6 ceiling. Shape rules only —
+        value rules are the lane's refusal table (values on 200).
+      required: [paymentId, amount, reason]
+      properties:
+        paymentId: {type: string, format: uuid}
+        amount: {$ref: '#/components/schemas/Money'}
+        reason:
+          type: string
+          description: Blankness is the lane's REFUND_REASON_REQUIRED refusal value.
+        requestedBy:
+          type: string
+          description: >
+            Optional requester — defaults to the authenticated principal. A
+            present-but-blank value is the lane's REFUND_REQUESTER_REQUIRED
+            refusal value.
+
+    AdjustmentRefusalCode:
+      type: string
+      description: >
+        The adjustments lane's refusal vocabulary, ported verbatim from the
+        domain modules (these are refusal VALUES on 200 responses — they do
+        not appear in the §38 error envelope): CREDIT_NOTE_REASON_REQUIRED,
+        CREDIT_NOTE_TOTAL_INVALID (credit-note.ts draftCreditNote);
+        REFUND_REASON_REQUIRED, REFUND_REQUESTER_REQUIRED,
+        REFUND_AMOUNT_INVALID, REFUND_EXCEEDS_CEILING (refund.ts
+        requestRefund); CURRENCY_MISMATCH (shared/money.ts — the ceiling
+        comparison refuses cross-currency before it can succeed, R10).
+      enum:
+        - CREDIT_NOTE_REASON_REQUIRED
+        - CREDIT_NOTE_TOTAL_INVALID
+        - REFUND_REASON_REQUIRED
+        - REFUND_REQUESTER_REQUIRED
+        - REFUND_AMOUNT_INVALID
+        - REFUND_EXCEEDS_CEILING
+        - CURRENCY_MISMATCH
+
+    AdjustmentRefusal:
+      type: object
+      description: One domain refusal, carried as a VALUE in the 200 body.
+      required: [code, message, field]
+      properties:
+        code: {$ref: '#/components/schemas/AdjustmentRefusalCode'}
+        message:
+          type: string
+          description: The domain module's own refusal message, verbatim.
+        field:
+          type: string
+          description: The body field the refusal is about (dot paths into objects).
+        details:
+          type: object
+          description: >
+            The domain error's structured details when it carries any (e.g.
+            REFUND_EXCEEDS_CEILING: requestedMinor, ceilingMinor, paymentId).
+
+    CreditNoteIntentView:
+      type: object
+      description: The evaluated draft — a proposal, never a stored row.
+      required: [id, customerId, invoiceId, reason, total, state]
+      properties:
+        id: {type: string, format: uuid}
+        customerId: {type: string, format: uuid}
+        invoiceId:
+          type: [string, 'null']
+        reason: {type: string}
+        total: {$ref: '#/components/schemas/Money'}
+        state:
+          type: string
+          description: Always `draft` — the intent surface proposes, it never advances.
+          enum: [draft]
+
+    RefundIntentView:
+      type: object
+      description: >
+        The proposed Requested refund plus the R6 ceiling it was evaluated
+        against (an audit value — the ceiling is derived from the payment
+        snapshot at evaluation time).
+      required: [id, paymentId, requestedBy, reason, total, state, ceiling]
+      properties:
+        id: {type: string, format: uuid}
+        paymentId: {type: string, format: uuid}
+        requestedBy: {type: string}
+        reason: {type: string}
+        total: {$ref: '#/components/schemas/Money'}
+        state:
+          type: string
+          description: Always `requested` — the machine's entry state (docs/03).
+          enum: [requested]
+        ceiling: {$ref: '#/components/schemas/Money'}
+
+    CreditNoteIntentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [intent, accepted, refusals]
+          properties:
+            intent:
+              anyOf:
+                - {$ref: '#/components/schemas/CreditNoteIntentView'}
+                - type: 'null'
+            accepted: {type: boolean}
+            refusals:
+              type: array
+              items: {$ref: '#/components/schemas/AdjustmentRefusal'}
+
+    RefundIntentResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [intent, accepted, refusals]
+          properties:
+            intent:
+              anyOf:
+                - {$ref: '#/components/schemas/RefundIntentView'}
+                - type: 'null'
+            accepted: {type: boolean}
+            refusals:
+              type: array
+              items: {$ref: '#/components/schemas/AdjustmentRefusal'}
+
+    CreditNoteFeedRow:
+      type: object
+      description: The adjustments feed's credit-note row.
+      required: [kind, id, customerId, invoiceId, reason, total, state, issuedAt, voidedAt, createdAt]
+      properties:
+        kind:
+          type: string
+          enum: [credit_note]
+        id: {type: string}
+        customerId: {type: string}
+        invoiceId:
+          type: [string, 'null']
+        reason: {type: string}
+        total: {$ref: '#/components/schemas/Money'}
+        state:
+          type: string
+          description: The CreditNoteState machine (credit-note.ts).
+          enum: [draft, issued, partially_applied, fully_applied, voided]
+        issuedAt:
+          type: [string, 'null']
+          format: date-time
+        voidedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt: {type: string, format: date-time}
+
+    RefundFeedRow:
+      type: object
+      description: The adjustments feed's refund row.
+      required: [kind, id, paymentId, requestedBy, reason, total, state, externalRef, rejectedReason, failedReason, createdAt]
+      properties:
+        kind:
+          type: string
+          enum: [refund]
+        id: {type: string}
+        paymentId: {type: string}
+        requestedBy:
+          type: [string, 'null']
+        reason: {type: string}
+        total: {$ref: '#/components/schemas/Money'}
+        state:
+          type: string
+          description: The RefundState machine (refund.ts); reservations start `requested`.
+          enum: [requested, approved, rejected, processing, completed, failed]
+        externalRef:
+          type: [string, 'null']
+        rejectedReason:
+          type: [string, 'null']
+        failedReason:
+          type: [string, 'null']
+        createdAt: {type: string, format: date-time}
+
+    AdjustmentListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [adjustments]
+          properties:
+            adjustments:
+              type: array
+              items:
+                oneOf:
+                  - {$ref: '#/components/schemas/RefundFeedRow'}
+                  - {$ref: '#/components/schemas/CreditNoteFeedRow'}
+        meta: {$ref: '#/components/schemas/PaginationMeta'}
 
   # ---- reusable error responses ---------------------------------------------
 

@@ -223,3 +223,67 @@ func scopeArrayField(body map[string]any, name string) ([]string, *infra.DomainE
 	}
 	return out, nil
 }
+
+// ---------------------------------------------------------------------------
+// Intent-surface guards (issue #132) — the /v1/adjustments evaluators defer
+// VALUE validity to the domain refusal table, so these guards check JSON
+// SHAPE only: a blank string or a non-positive minor is shape-legal (the
+// lane answers it as a refusal VALUE on 200), a non-string/non-integer is
+// not evaluable and refuses with 400 HTTP_BODY_INVALID like every other
+// mounted field.
+// ---------------------------------------------------------------------------
+
+// rawStringField reads a required string field WITHOUT the blankness rule —
+// blankness is the domain's refusal (REFUND_REASON_REQUIRED et al).
+func rawStringField(body map[string]any, name string) (string, *infra.DomainError) {
+	value, ok := body[name].(string)
+	if !ok {
+		return "", infra.NewDomainError(CodeBodyInvalid, "field '"+name+"' must be a string", nil)
+	}
+	return value, nil
+}
+
+// rawOptionalStringField reads a string field that may be absent, without
+// the blankness rule (a present-but-blank requestedBy is the lane's
+// REFUND_REQUESTER_REQUIRED refusal value).
+func rawOptionalStringField(body map[string]any, name string) (string, bool, *infra.DomainError) {
+	raw, present := body[name]
+	if !present || raw == nil {
+		return "", false, nil
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return "", true, infra.NewDomainError(CodeBodyInvalid, "field '"+name+"' must be a string", nil)
+	}
+	return value, true, nil
+}
+
+// rawMoneyMinorField reads `{ minor, currency }` money for the intent
+// surface: minor must be a JSON integer within the safe-integer boundary
+// (any SIGN — non-positive minors are domain refusal values) and currency a
+// member of the closed ISO set. Everything else matches moneyMinorField.
+func rawMoneyMinorField(body map[string]any, name string) (int64, money.Currency, *infra.DomainError) {
+	raw, ok := body[name].(map[string]any)
+	if !ok {
+		return 0, "", infra.NewDomainError(CodeBodyInvalid, "field '"+name+"' must be an object { minor, currency }", nil)
+	}
+	minorRaw, hasMinor := raw["minor"]
+	currencyRaw, hasCurrency := raw["currency"]
+	if !hasMinor || !hasCurrency {
+		return 0, "", infra.NewDomainError(CodeBodyInvalid, "field '"+name+"' must be an object { minor, currency }", nil)
+	}
+	minor, ok := minorRaw.(jsonNumber)
+	if !ok {
+		return 0, "", infra.NewDomainError(CodeBodyInvalid, "field '"+name+".minor' must be an integer (minor units)", nil)
+	}
+	value, err := strconv.ParseInt(minor.String(), 10, 64)
+	if err != nil || value > safeIntegerMax {
+		return 0, "", infra.NewDomainError(CodeBodyInvalid, "field '"+name+".minor' must be an integer (minor units)", nil)
+	}
+	currency, ok := currencyRaw.(string)
+	if !ok || !money.IsValidCurrency(money.Currency(currency)) {
+		return 0, "", infra.NewDomainError(CodeBodyInvalid,
+			"field '"+name+".currency' must be one of: KES, USD, GBP, EUR, TZS, UGX", nil)
+	}
+	return value, money.Currency(currency), nil
+}

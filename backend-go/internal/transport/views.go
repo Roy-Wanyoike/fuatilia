@@ -342,3 +342,127 @@ func detailString(detail map[string]any, key string) string {
 	v, _ := detail[key].(string)
 	return v
 }
+
+// ---------------------------------------------------------------------------
+// Ledger + adjustments views (issue #132)
+// ---------------------------------------------------------------------------
+
+// strPtrOrNull renders an optional string pointer (nil → null).
+func strPtrOrNull(s *string) any {
+	if s == nil {
+		return nil
+	}
+	return *s
+}
+
+// ledgerAccountView projects one chart-of-accounts row.
+func ledgerAccountView(a repositories.LedgerAccountRow) map[string]any {
+	return map[string]any{
+		"id":       a.ID,
+		"code":     a.Code,
+		"name":     a.Name,
+		"kind":     a.Kind,
+		"currency": a.Currency,
+	}
+}
+
+// ledgerEntryLineView projects one journal line. The stored direction
+// ('debit'/'credit') rides the wire as the domain's PostingDirection
+// magnitude ('DEBIT'/'CREDIT' — src/domain/ledger/accounts.ts).
+func ledgerEntryLineView(l repositories.LedgerEntryLineRow) map[string]any {
+	direction := "DEBIT"
+	if l.Direction == "credit" {
+		direction = "CREDIT"
+	}
+	return map[string]any{
+		"entryId":     l.EntryID,
+		"lineNo":      l.LineNo,
+		"accountCode": l.AccountCode,
+		"accountKind": l.AccountKind,
+		"direction":   direction,
+		"amount":      jsonMoney{Minor: l.AmountMinor, Currency: l.Currency},
+		"source":      l.Source,
+		"sourceRef":   strPtrOrNull(l.SourceRef),
+		"journalRef":  l.JournalRef,
+		"postedAt":    isoOf(l.PostedAt),
+		"reversalOf":  strPtrOrNull(l.ReversalOf),
+	}
+}
+
+// refusalView renders one domain refusal VALUE (the intent surface's
+// refusal-as-value contract — never an error envelope).
+func refusalView(r application.AdjustmentRefusal) map[string]any {
+	var details any
+	if r.Details != nil {
+		details = r.Details
+	}
+	return map[string]any{
+		"code":    r.Code,
+		"message": r.Message,
+		"field":   r.Field,
+		"details": details,
+	}
+}
+
+// creditNoteIntentView projects the evaluated draft intent (nil → null —
+// a refused proposal carries no intent).
+func creditNoteIntentView(i *application.CreditNoteIntent) map[string]any {
+	if i == nil {
+		return nil
+	}
+	var invoiceID any
+	if i.InvoiceID != "" {
+		invoiceID = i.InvoiceID
+	}
+	return map[string]any{
+		"id":         i.ID,
+		"customerId": i.CustomerID,
+		"invoiceId":  invoiceID,
+		"reason":     i.Reason,
+		"total":      jsonMoney{Minor: i.TotalMinor, Currency: i.Currency},
+		"state":      i.State,
+	}
+}
+
+// refundIntentView projects the evaluated refund intent with the R6
+// ceiling it was evaluated against.
+func refundIntentView(i *application.RefundIntent) map[string]any {
+	if i == nil {
+		return nil
+	}
+	return map[string]any{
+		"id":          i.ID,
+		"paymentId":   i.PaymentID,
+		"requestedBy": i.RequestedBy,
+		"reason":      i.Reason,
+		"total":       jsonMoney{Minor: i.TotalMinor, Currency: i.Currency},
+		"state":       i.State,
+		"ceiling":     jsonMoney{Minor: i.CeilingMinor, Currency: i.CeilingCurrency},
+	}
+}
+
+// adjustmentView projects one feed row of the discriminated adjustments
+// union (kind refund | credit_note).
+func adjustmentView(a repositories.AdjustmentRow) map[string]any {
+	row := map[string]any{
+		"kind":      a.Kind,
+		"id":        a.ID,
+		"reason":    a.Reason,
+		"total":     jsonMoney{Minor: a.TotalMinor, Currency: a.Currency},
+		"state":     a.State,
+		"createdAt": isoOf(a.CreatedAt),
+	}
+	if a.Kind == "credit_note" {
+		row["customerId"] = strPtrOrNull(a.CustomerID)
+		row["invoiceId"] = strPtrOrNull(a.InvoiceID)
+		row["issuedAt"] = isoPtr(a.IssuedAt)
+		row["voidedAt"] = isoPtr(a.VoidedAt)
+		return row
+	}
+	row["paymentId"] = strPtrOrNull(a.PaymentID)
+	row["requestedBy"] = strPtrOrNull(a.RequestedBy)
+	row["externalRef"] = strPtrOrNull(a.ExternalRef)
+	row["rejectedReason"] = strPtrOrNull(a.RejectedReason)
+	row["failedReason"] = strPtrOrNull(a.FailedReason)
+	return row
+}

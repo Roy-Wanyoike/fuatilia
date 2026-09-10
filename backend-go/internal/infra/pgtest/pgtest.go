@@ -8,7 +8,7 @@
 //     package owns ONE dedicated database (fuatilia_api_test) so sibling
 //     lanes on the same cluster are never touched; every test truncates the
 //     rows it seeded (orgs CASCADE + the FK-free audit_events) in cleanup.
-//     Migrations 0001–0014 are applied once under an advisory lock.
+//     Migrations 0001–0015 are applied once under an advisory lock.
 //
 //   - StartTemp: a private initdb'd cluster on an ephemeral port (used by
 //     the restart-resilience test, which must stop and start PostgreSQL
@@ -63,7 +63,7 @@ const (
 
 	// migrationCount is the expected db/migrations/*.sql file count; a drift
 	// fails loudly instead of silently applying a partial schema.
-	migrationCount = 14
+	migrationCount = 15
 )
 
 // Host is the TCP host the lane clusters listen on.
@@ -125,7 +125,7 @@ func (c *Cluster) TruncateAll(ctx context.Context, database string) error {
 
 // startShared reuses (or provisions) the lane cluster on FUATILIA_TEST_PGPORT
 // (default 5435), then ensures the dedicated database exists with migrations
-// 0001–0014 applied.
+// 0001–0015 applied.
 func startShared(ctx context.Context) (*Cluster, error) {
 	binDir, err := PGBin()
 	if err != nil {
@@ -229,7 +229,7 @@ func (c *Cluster) Stop(ctx context.Context) error {
 }
 
 // ensureMigratedDB creates the dedicated database when missing and applies
-// migrations 0001–0014 exactly once (per-cluster advisory lock so concurrent
+// migrations 0001–0015 exactly once (per-cluster advisory lock so concurrent
 // test binaries cannot double-apply).
 func (c *Cluster) ensureMigratedDB(ctx context.Context) error {
 	conn, err := pgx.Connect(ctx, c.maintenanceDSN)

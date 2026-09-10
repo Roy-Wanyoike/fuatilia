@@ -762,7 +762,7 @@ func actionWireView(a application.CaseAction) map[string]any {
 	}
 }
 
-// mountRoutes assembles the FULL 22-op table in TS composition order
+// mountRoutes assembles the FULL 27-op table in TS composition order
 // (server.ts): public rows + the auth admin table + the resource tables.
 // The capability list is derived over the admin+resource rows ONLY (the TS
 // composition derives before mounting health/meta — public rows are not
@@ -773,6 +773,8 @@ func mountRoutes(deps Deps) ([]RouteRecord, error) {
 	mounted = append(mounted, receivablesRoutes(deps)...)
 	mounted = append(mounted, paymentsRoutes(deps)...)
 	mounted = append(mounted, collectionsRoutes(deps)...)
+	mounted = append(mounted, ledgerRoutes(deps)...)
+	mounted = append(mounted, adjustmentsRoutes(deps)...)
 	capabilities := capabilitiesOf(mounted)
 
 	table := []RouteRecord{}
@@ -823,5 +825,217 @@ func sortStrings(values []string) {
 				values[i], values[j] = values[j], values[i]
 			}
 		}
+	}
+}
+
+// ledgerAccountSort / ledgerEntrySort are the ledger lists' whitelists
+// (repositories.LedgerAccountSort / LedgerEntrySort carry the columns).
+var ledgerAccountSort = repositories.LedgerAccountSort
+var ledgerEntrySort = repositories.LedgerEntrySort
+
+// adjustmentSort is the adjustments feed's whitelist.
+var adjustmentSort = repositories.AdjustmentSort
+
+// ledgerRoutes mounts the append-only GL read surface (routes/ledger.ts,
+// issue #132) — both rows require `ledger:read`. READ-ONLY by contract:
+// no /v1 operation mutates ledger truth (R3); rows arrive only through the
+// posting flows (a confirmed payment posts its balanced entry in the same
+// transaction — repositories.PostConfirmationEntry, R4/R5).
+func ledgerRoutes(deps Deps) []RouteRecord {
+	svc := deps.Services
+	return []RouteRecord{
+		{
+			Method: "GET", Pattern: "/v1/ledger/accounts", Permission: "ledger:read",
+			Handler: func(rc *RequestContext) (HandlerResult, error) {
+				principal, err := requirePrincipal(rc)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				page, derr := parsePagination(rc.Query)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				sorting, derr := parseSorting(rc.Query, ledgerAccountSort)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				rows, total, err := svc.ListLedgerAccounts(rc.context(), deps.Services.Stores.Pool, principal.OrgID,
+					sorting.Column, sorting.Order, page.Limit, page.Offset)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				views := []map[string]any{}
+				for _, row := range rows {
+					views = append(views, ledgerAccountView(row))
+				}
+				return HandlerResult{Status: 200, Data: map[string]any{"accounts": views},
+					Meta: paginatedMeta(page.Offset, page.Limit, total)}, nil
+			},
+		},
+		{
+			Method: "GET", Pattern: "/v1/ledger/entries", Permission: "ledger:read",
+			Handler: func(rc *RequestContext) (HandlerResult, error) {
+				principal, err := requirePrincipal(rc)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				page, derr := parsePagination(rc.Query)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				sorting, derr := parseSorting(rc.Query, ledgerEntrySort)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				rows, total, err := svc.ListLedgerEntries(rc.context(), deps.Services.Stores.Pool, principal.OrgID,
+					sorting.Column, sorting.Order, page.Limit, page.Offset)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				views := []map[string]any{}
+				for _, row := range rows {
+					views = append(views, ledgerEntryLineView(row))
+				}
+				return HandlerResult{Status: 200, Data: map[string]any{"entries": views},
+					Meta: paginatedMeta(page.Offset, page.Limit, total)}, nil
+			},
+		},
+	}
+}
+
+// adjustmentsRoutes mounts the adjustments surface (routes/adjustments.ts,
+// issue #132): the org-scoped feed plus the two INTENT evaluators. The
+// evaluators are DRY-RUN ports of the adjustments lane's refusal tables
+// (src/domain/adjustments/{credit-note,refund}.ts): a refused proposal
+// answers 200 with the refusals AS VALUES and NOTHING is written — no
+// refunds row, no credit note, no ledger entry (R3/R6/R7). Both rows
+// require `adjustments:request`.
+func adjustmentsRoutes(deps Deps) []RouteRecord {
+	svc := deps.Services
+	return []RouteRecord{
+		{
+			Method: "GET", Pattern: "/v1/adjustments", Permission: "adjustments:request",
+			Handler: func(rc *RequestContext) (HandlerResult, error) {
+				principal, err := requirePrincipal(rc)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				page, derr := parsePagination(rc.Query)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				sorting, derr := parseSorting(rc.Query, adjustmentSort)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				rows, total, err := svc.ListAdjustments(rc.context(), deps.Services.Stores.Pool, principal.OrgID,
+					application.AdjustmentQuery{SortCol: sorting.Column, Order: sorting.Order, Limit: page.Limit, Offset: page.Offset})
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				views := []map[string]any{}
+				for _, row := range rows {
+					views = append(views, adjustmentView(row))
+				}
+				return HandlerResult{Status: 200, Data: map[string]any{"adjustments": views},
+					Meta: paginatedMeta(page.Offset, page.Limit, total)}, nil
+			},
+		},
+		{
+			Method: "POST", Pattern: "/v1/adjustments/credit-notes", Permission: "adjustments:request",
+			Handler: func(rc *RequestContext) (HandlerResult, error) {
+				// The evaluation is pure (nothing persists, nothing to scope),
+				// but the fail-closed principal assertion still runs: a
+				// permission-gated handler without a principal is a kernel bug.
+				if _, err := requirePrincipal(rc); err != nil {
+					return HandlerResult{}, err
+				}
+				body, derr := bodyObject(rc.Body)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				customerID, derr := uuidField(body, "customerId")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				invoiceID, _, derr := optionalUUIDField(body, "invoiceId")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				reason, derr := rawStringField(body, "reason")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				totalMinor, currency, derr := rawMoneyMinorField(body, "total")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				result := svc.EvaluateCreditNoteIntent(application.CreditNoteIntentCommand{
+					CustomerID: customerID,
+					InvoiceID:  invoiceID,
+					Reason:     reason,
+					TotalMinor: totalMinor,
+					Currency:   string(currency),
+				})
+				refusals := []map[string]any{}
+				for _, refusal := range result.Refusals {
+					refusals = append(refusals, refusalView(refusal))
+				}
+				return HandlerResult{Status: 200, Data: map[string]any{
+					"intent":   creditNoteIntentView(result.Intent),
+					"accepted": result.Accepted,
+					"refusals": refusals,
+				}}, nil
+			},
+		},
+		{
+			Method: "POST", Pattern: "/v1/adjustments/refund-reservations", Permission: "adjustments:request",
+			Handler: func(rc *RequestContext) (HandlerResult, error) {
+				principal, err := requirePrincipal(rc)
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				body, derr := bodyObject(rc.Body)
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				paymentID, derr := uuidField(body, "paymentId")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				amountMinor, currency, derr := rawMoneyMinorField(body, "amount")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				reason, derr := rawStringField(body, "reason")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				requestedBy, _, derr := rawOptionalStringField(body, "requestedBy")
+				if derr != nil {
+					return HandlerResult{}, derr
+				}
+				result, err := svc.EvaluateRefundReservationIntent(rc.context(), deps.Services.Stores.Pool, principal.OrgID,
+					principal.PrincipalID, application.RefundIntentCommand{
+						PaymentID:   paymentID,
+						AmountMinor: amountMinor,
+						Currency:    string(currency),
+						Reason:      reason,
+						RequestedBy: requestedBy,
+					})
+				if err != nil {
+					return HandlerResult{}, err
+				}
+				refusals := []map[string]any{}
+				for _, refusal := range result.Refusals {
+					refusals = append(refusals, refusalView(refusal))
+				}
+				return HandlerResult{Status: 200, Data: map[string]any{
+					"intent":   refundIntentView(result.Intent),
+					"accepted": result.Accepted,
+					"refusals": refusals,
+				}}, nil
+			},
+		},
 	}
 }
