@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { usePortalT } from '@/lib/portal-i18n/context';
 
 /**
  * Sign-out panel (issue #133): issues DELETE /api/auth/session, whose
@@ -11,12 +12,14 @@ import { Button } from '@/components/ui/button';
  * asks the server to clear the cookie, then reports the honest outcome.
  *
  * After a successful sign-out the (dashboard) middleware gate refuses every
- * dashboard route: a fresh visit is redirected to /sign-in.
+ * dashboard route: a fresh visit is redirected to /sign-in. Strings resolve
+ * through the shared i18n catalogs (issue #180).
  */
 
 type SignOutPhase = 'idle' | 'signingOut' | 'signedOut' | 'failed';
 
 export function SignOutPanel() {
+  const t = usePortalT();
   const [phase, setPhase] = useState<SignOutPhase>('idle');
 
   async function handleSignOut(): Promise<void> {
@@ -37,13 +40,13 @@ export function SignOutPanel() {
     return (
       <div className="flex flex-col gap-3" data-testid="sign-out-done">
         <p role="status" className="text-sm text-ink-soft">
-          You are signed out. The session cookie has been cleared on this browser.
+          {t('auth.signOut.done')}
         </p>
         <Link
           href="/sign-in"
           className="text-sm font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
-          Sign in again
+          {t('auth.signOut.signInAgain')}
         </Link>
       </div>
     );
@@ -53,14 +56,10 @@ export function SignOutPanel() {
     <div className="flex flex-col gap-3" data-testid="sign-out-panel">
       {phase === 'failed' && (
         <p role="alert" className="text-sm text-danger" data-testid="sign-out-failed">
-          The sign-out request did not complete. The session cookie may still be present — try
-          again.
+          {t('auth.signOut.failed')}
         </p>
       )}
-      <p className="text-sm text-ink-soft">
-        Signing out expires the HTTP-only session cookie on this browser. The credential itself is
-        never readable by this page.
-      </p>
+      <p className="text-sm text-ink-soft">{t('auth.signOut.help')}</p>
       <Button
         className="w-fit"
         onClick={() => {
@@ -68,7 +67,7 @@ export function SignOutPanel() {
         }}
         disabled={phase === 'signingOut'}
       >
-        {phase === 'signingOut' ? 'Signing out…' : 'Sign out'}
+        {phase === 'signingOut' ? t('auth.signOut.submitting') : t('auth.signOut.submit')}
       </Button>
     </div>
   );

@@ -1,5 +1,7 @@
 'use client';
 
+import { usePortalT } from '@/lib/portal-i18n/context';
+
 /**
  * The clean REFUSED surface for the collector sign-in gate (issue #133):
  * rendered when the pasted session credential was not accepted by the live
@@ -10,7 +12,9 @@
  * session to sign out of here).
  *
  * Mirror of app/(portal)/_components/access-refused.tsx — kept lane-local
- * so the two route groups never import across each other.
+ * so the two route groups never import across each other. The envelope
+ * labels adopt the SHARED `common` catalog section (issue #180) — they are
+ * byte-identical to the #149 portal rendering.
  */
 
 export interface AccessRefusedProps {
@@ -32,6 +36,7 @@ export function AccessRefused({
   requestId,
   message,
 }: AccessRefusedProps) {
+  const t = usePortalT();
   return (
     <div
       role="alert"
@@ -44,11 +49,11 @@ export function AccessRefused({
         <p className="text-xs text-ink-soft">{message}</p>
       )}
       <p className="font-mono text-xs text-ink-soft">
-        code: <span className="font-semibold">{code}</span>
+        {t('common.codeLabel')} <span className="font-semibold">{code}</span>
       </p>
       {requestId !== null && requestId.length > 0 && (
         <p className="font-mono text-xs text-ink-soft">
-          requestId: <span>{requestId}</span>
+          {t('common.requestIdLabel')} <span>{requestId}</span>
         </p>
       )}
     </div>
