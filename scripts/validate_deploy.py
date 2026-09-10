@@ -97,10 +97,15 @@ REQUIRED_ENV_KEYS = {
     # test harness (make gate) — documented placeholders, never runtime config
     "FUATILIA_TEST_DATABASE_URL",
     "FUATILIA_TEST_PGBIN",
-    # Daraja (M-Pesa) client — backend-go/internal/daraja.ConfigFromEnv
+    # Daraja (M-Pesa) rail — backend-go/internal/daraja.ConfigFromEnv + the
+    # api's STK wire binding (issue #178): all five empty disables the rail,
+    # a partial set is a boot failure.
     "DARAJA_BASE_URL",
     "DARAJA_CONSUMER_KEY",
     "DARAJA_CONSUMER_SECRET",
+    "DARAJA_SHORT_CODE",
+    "DARAJA_PASSKEY",
+    "DARAJA_CALLBACK_BASE_URL",
 }
 # Never required as .env keys: managed by Next.js/the Dockerfiles, not by
 # operators. PATH is the system search path — pgtest.go (issue #131) reads it

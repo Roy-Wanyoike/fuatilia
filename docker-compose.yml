@@ -115,6 +115,17 @@ services:
       FUATILIA_PG_MAX_CONNS: ${FUATILIA_PG_MAX_CONNS:-10}
       FUATILIA_PG_LIFETIME: ${FUATILIA_PG_LIFETIME:-30m}
       FUATILIA_PG_IDLE_TIME: ${FUATILIA_PG_IDLE_TIME:-5m}
+      # Daraja (M-Pesa) rail (issue #178): every variable empty boots
+      # rail-disabled (the example stack carries no Safaricom account);
+      # setting ALL FIVE in .env enables STK execution, and a partial set is
+      # a boot failure by design (fail at boot, never on the first push).
+      # Never commit real credentials — obtain them from the Daraja portal.
+      DARAJA_BASE_URL: ${DARAJA_BASE_URL:-https://sandbox.safaricom.co.ke}
+      DARAJA_CONSUMER_KEY: ${DARAJA_CONSUMER_KEY:-}
+      DARAJA_CONSUMER_SECRET: ${DARAJA_CONSUMER_SECRET:-}
+      DARAJA_SHORT_CODE: ${DARAJA_SHORT_CODE:-}
+      DARAJA_PASSKEY: ${DARAJA_PASSKEY:-}
+      DARAJA_CALLBACK_BASE_URL: ${DARAJA_CALLBACK_BASE_URL:-}
     ports:
       # A host-published control-plane port. Keep in agreement with the api
       # target's HEALTHCHECK (8080 inside the container) — `make smoke` and

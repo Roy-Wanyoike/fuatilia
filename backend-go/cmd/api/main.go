@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/application"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/auth"
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/daraja"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/infra"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/observability"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/repositories"
@@ -77,11 +79,25 @@ func run() error {
 
 	clock := infra.SystemClock{}
 	stores := &repositories.Stores{Pool: pool}
+
+	// The OUTBOUND Daraja rail (issue #178): the STK execution port binds
+	// here — the production daraja.STKWire adapter over a live client.
+	// All five DARAJA_* variables empty disables the rail (ExecuteStkPush
+	// refuses with STK_WIRE_UNAVAILABLE — the example stack boots without
+	// a Safaricom account); a partial set is a boot failure (a
+	// half-configured rail would only fail on the first live push — fail
+	// at boot instead). The INBOUND callback endpoints are unaffected:
+	// C2B rail money flows through the intake funnel with no client.
+	stkWire, err := darajaWireFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
 	services := &application.Services{
 		Stores:  stores,
 		Clock:   clock,
 		IDs:     infra.NewUUID,
 		Replays: infra.NewIDRegistry(),
+		StkPush: stkWire,
 	}
 
 	// Credential verification runs against the SAME org-scoped store; every
@@ -139,6 +155,7 @@ func run() error {
 			slog.String("addr", cfg.ListenAddr),
 			slog.Int("routes", len(composed.Kernel.Table())),
 			slog.String("metrics", "/metrics"),
+			slog.Bool("stkRail", stkWire != nil),
 		)
 		errCh <- server.ListenAndServe()
 	}()
@@ -174,4 +191,54 @@ func poolStatsSource(pool *pgxpool.Pool) func() observability.PoolStats {
 			Max:      s.MaxConns(),
 		}
 	}
+}
+
+// darajaRailEnvNames are the five variables the OUTBOUND STK rail needs —
+// every one set enables it, every one empty disables it, a subset refuses
+// the boot. DARAJA_BASE_URL is deliberately NOT in the list: it is optional
+// (empty binds the Safaricom sandbox default in daraja.ConfigFromEnv).
+var darajaRailEnvNames = []string{
+	"DARAJA_CONSUMER_KEY", "DARAJA_CONSUMER_SECRET",
+	"DARAJA_SHORT_CODE", "DARAJA_PASSKEY", "DARAJA_CALLBACK_BASE_URL",
+}
+
+// darajaWireFromEnv resolves the OUTBOUND STK rail (issue #178) from the
+// environment: the production daraja.STKWire adapter over a live client, or
+// nil when the rail is disabled. The merchant context (short code, passkey,
+// callback URL) is the service-injected secret source the daraja package
+// requires — values come from the environment only, never literals, and the
+// adapter's own validation runs at boot so a deployment that boots can
+// initiate. The http.Client is the wire cap the client's Config.Timeout
+// documents (per-call deadline on the transport).
+func darajaWireFromEnv(env func(string) string) (daraja.StkPushWire, error) {
+	set := 0
+	for _, name := range darajaRailEnvNames {
+		if strings.TrimSpace(env(name)) != "" {
+			set++
+		}
+	}
+	if set == 0 {
+		return nil, nil // rail disabled: ExecuteStkPush refuses with STK_WIRE_UNAVAILABLE
+	}
+	if set != len(darajaRailEnvNames) {
+		return nil, fmt.Errorf("api: DARAJA_* configuration is partial (%d of %d set) — set all of %s to enable the STK rail, or none to disable it",
+			set, len(darajaRailEnvNames), strings.Join(darajaRailEnvNames, ", "))
+	}
+	cfg, err := daraja.ConfigFromEnv(env)
+	if err != nil {
+		return nil, fmt.Errorf("api: daraja client config rejected: %w", err)
+	}
+	client, err := daraja.NewClient(&http.Client{Timeout: cfg.Timeout}, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("api: daraja client rejected: %w", err)
+	}
+	wire, err := daraja.NewSTKWire(client, daraja.MerchantConfig{
+		ShortCode:   strings.TrimSpace(env("DARAJA_SHORT_CODE")),
+		Passkey:     strings.TrimSpace(env("DARAJA_PASSKEY")),
+		CallBackURL: strings.TrimSpace(env("DARAJA_CALLBACK_BASE_URL")),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("api: daraja STK adapter rejected: %w", err)
+	}
+	return wire, nil
 }

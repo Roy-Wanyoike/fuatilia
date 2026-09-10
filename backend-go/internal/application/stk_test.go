@@ -7,7 +7,6 @@ package application_test
 
 import (
 	"context"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -82,22 +81,24 @@ func bootStkWorld(t *testing.T) *stkWorld {
 	ctx := context.Background()
 
 	stkWorldMu.Lock()
-	cluster, err := pgtest.RequireShared(ctx)
+	// The application lane owns its OWN database on the shared cluster: the
+	// transport integration suite truncates fuatilia_api_test at boot AND
+	// cleanup, and `go test ./...` runs packages concurrently — a shared row
+	// space would let one package's truncate wipe the other's seed mid-run
+	// (RequireSharedFor gives every truncating lane a named database).
+	cluster, err := pgtest.RequireSharedFor(ctx, pgtest.ApplicationDBName)
 	stkWorldMu.Unlock()
 	if err != nil {
 		t.Fatalf("pgtest: shared cluster bootstrap failed (the merge gate includes REAL PostgreSQL): %v", err)
 	}
-	databaseURL := os.Getenv("FUATILIA_TEST_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = cluster.DSN(pgtest.SharedDBName)
-	}
-	if err := cluster.TruncateAll(ctx, pgtest.SharedDBName); err != nil {
+	databaseURL := cluster.DSN(pgtest.ApplicationDBName)
+	if err := cluster.TruncateAll(ctx, pgtest.ApplicationDBName); err != nil {
 		t.Fatalf("pgtest: truncate: %v", err)
 	}
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		_ = cluster.TruncateAll(cleanupCtx, pgtest.SharedDBName)
+		_ = cluster.TruncateAll(cleanupCtx, pgtest.ApplicationDBName)
 	})
 
 	pool, err := pgxpool.New(ctx, databaseURL)
