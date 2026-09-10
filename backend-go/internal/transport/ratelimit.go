@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -56,10 +57,12 @@ type RateLimitConfig struct {
 // enabled reports whether the configuration turns the limiter on.
 func (c RateLimitConfig) enabled() bool { return c.RequestsPerMinute > 0 }
 
-// normalized applies the Burst default and clamps the refill rate.
+// normalized applies the Burst default: an unset (≤ 0) capacity defaults to
+// the whole per-minute budget; an explicit capacity — including one larger
+// than the per-minute budget (slow refill, deep burst) — is respected.
 func (c RateLimitConfig) normalized() RateLimitConfig {
 	out := c
-	if out.Burst <= 0 || out.Burst > out.RequestsPerMinute {
+	if out.Burst <= 0 {
 		out.Burst = out.RequestsPerMinute
 	}
 	return out
@@ -168,9 +171,10 @@ func (s *InMemoryRateLimitStore) Take(key string, now time.Time) RateLimitDecisi
 		return RateLimitDecision{Allowed: true, Limit: s.burst, Remaining: int(bucket.tokens)}
 	}
 
-	// Refused: report the wait for ONE token (Retry-After's honest minimum).
+	// Refused: report the wait for ONE token (Retry-After's honest minimum),
+	// ceiled to whole seconds — the header never under-reports the wait.
 	waitSeconds := (1 - bucket.tokens) / s.rate
-	retryAfter := time.Duration(waitSeconds * float64(time.Second))
+	retryAfter := time.Duration(math.Ceil(waitSeconds) * float64(time.Second))
 	if retryAfter < time.Second {
 		retryAfter = time.Second
 	}
