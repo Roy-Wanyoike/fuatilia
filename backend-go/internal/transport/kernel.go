@@ -11,6 +11,7 @@ import (
 
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/auth"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/infra"
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/observability"
 )
 
 // asDomainError unwraps an *infra.DomainError through the error chain
@@ -31,6 +32,27 @@ type RequestContext struct {
 	Principal  *auth.Principal
 	Body       any
 	RawRequest *http.Request
+
+	// log is resolved by the kernel at dispatch (see Log). Handlers never
+	// set it; a synthetic RequestContext without one falls back in Log().
+	log *slog.Logger
+}
+
+// Log returns the request-scoped logger (issue #176): the observability
+// middleware's per-request logger with requestId + traceId bound when the
+// middleware wrapped the kernel, the kernel's base logger otherwise — so a
+// handler's records are correlatable with the access log without any extra
+// plumbing. A bare synthetic RequestContext degrades to slog.Default().
+func (rc *RequestContext) Log() *slog.Logger {
+	if rc != nil {
+		if rc.log != nil {
+			return rc.log
+		}
+		if rc.RawRequest != nil && observability.RequestIDFrom(rc.RawRequest.Context()) != "" {
+			return observability.RequestLoggerFrom(rc.RawRequest.Context())
+		}
+	}
+	return slog.Default()
 }
 
 // HandlerResult is a handler outcome. The kernel wraps Data/Meta into the
@@ -153,14 +175,34 @@ func (k *Kernel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	k.security.apply(w.Header())
 	requestID, org, status := k.handle(w, r)
-	k.log.Info("http.request",
-		slog.String("requestId", requestID),
+	// Access log (issue #176): when the observability middleware wrapped
+	// this kernel, its request-scoped logger already carries requestId +
+	// traceId — adopt it and do NOT repeat requestId (duplicate JSON keys);
+	// the plain kernel keeps the explicit requestId attribute.
+	log, scoped := k.accessLog(r)
+	attrs := make([]any, 0, 6)
+	if !scoped {
+		attrs = append(attrs, slog.String("requestId", requestID))
+	}
+	attrs = append(attrs,
 		slog.String("method", r.Method),
 		slog.String("path", r.URL.Path),
 		slog.Int("status", status),
 		slog.Int64("durationMs", time.Since(start).Milliseconds()),
 		slog.String("org", org),
 	)
+	log.Info("http.request", attrs...)
+}
+
+// accessLog resolves the access-line logger: the observability middleware's
+// request-scoped logger (issue #176 — requestId + traceId bound) when the
+// middleware wrapped this kernel, the kernel's base logger otherwise. The
+// bool reports that those ids are already IN the logger context.
+func (k *Kernel) accessLog(r *http.Request) (*slog.Logger, bool) {
+	if r != nil && observability.RequestIDFrom(r.Context()) != "" {
+		return observability.RequestLoggerFrom(r.Context()), true
+	}
+	return k.log, false
 }
 
 // handle drives one request through the pipeline and returns
@@ -266,6 +308,7 @@ func (k *Kernel) handle(w http.ResponseWriter, r *http.Request) (string, string,
 		Principal:  principal,
 		Body:       parsed.Value,
 		RawRequest: r,
+		log:        k.requestLog(r),
 	}
 
 	result, err := k.invoke(rc, match.route.record.Handler)
@@ -294,6 +337,15 @@ func (k *Kernel) handle(w http.ResponseWriter, r *http.Request) (string, string,
 		return requestID, org, fail(500, CodeInternalError, "internal server error", nil)
 	}
 	return requestID, org, respond(result.Status, successShape{Data: result.Data, Meta: result.Meta}, nil)
+}
+
+// requestLog resolves the handler-facing logger: the same request-scoped
+// logger the access line uses (requestId + traceId when the observability
+// middleware wrapped the kernel), so handler and access records share one
+// correlation context.
+func (k *Kernel) requestLog(r *http.Request) *slog.Logger {
+	log, _ := k.accessLog(r)
+	return log
 }
 
 // refuse429 renders the exhausted-bucket refusal: the §38 error envelope

@@ -45,6 +45,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
+
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/observability"
 )
 
 // Stable machine codes (SCREAMING_SNAKE_CASE), mirroring the TS families
@@ -97,6 +99,13 @@ type Config struct {
 	// Logger receives the structured per-cycle and per-failure records.
 	// Payload bytes are never logged — event_id and event_type only.
 	Logger *slog.Logger
+	// Metrics is the observability sink the relay feeds when wired
+	// (issue #176): per cycle it pushes the backlog probe (lag + DLQ
+	// depth — Relay implements observability.BacklogSource over its own
+	// pool) and adds the published/failed/DLQ-in counters from the cycle
+	// stats. nil (the default) records nothing — the zero-config relay
+	// stays metrics-free.
+	Metrics *observability.Metrics
 }
 
 // batchRow is one outbox_events row as handed to the publish loop.
@@ -238,9 +247,11 @@ func (r *Relay) RunOnce(ctx context.Context) error {
 			break
 		}
 	}
-	// Per-cycle observability record (issue #74): batch size, published,
-	// poison count, lag rows + oldest pending age. Payload bytes and PII
-	// never appear here — counts and ids only.
+	// Metrics feed first (issue #176 — recordMetrics), then the
+	// per-cycle log record (issue #74): batch size, published, poison
+	// count, lag rows + oldest pending age. Payload bytes and PII never
+	// appear here — counts and ids only.
+	r.recordMetrics(ctx, stats)
 	r.log.Info("outbox.cycle",
 		"orgs", stats.orgs,
 		"batch", stats.taken,

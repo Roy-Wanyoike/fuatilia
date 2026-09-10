@@ -20,9 +20,14 @@ type Deps struct {
 	// SecurityHeaders carries the deployment's header policy (the HSTS flag
 	// — issue #130). The zero value applies the four unconditional headers.
 	SecurityHeaders SecurityHeaders
-	Services        *application.Services
-	Auth            *auth.Authenticator
-	Clock           infra.Clock
+	// Observability carries the metrics/tracing handles the serving chain
+	// binds (issue #176). The zero value is the zero-config boot: the
+	// middleware still wraps (W3C pass-through + request ids) but no series
+	// exist and /metrics is not mounted.
+	Observability ObservabilityWiring
+	Services      *application.Services
+	Auth          *auth.Authenticator
+	Clock         infra.Clock
 }
 
 // publicRoutes mounts the no-auth rows (routes/public.ts): liveness + the
