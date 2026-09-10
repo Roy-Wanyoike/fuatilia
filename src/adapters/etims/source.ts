@@ -96,8 +96,11 @@ export interface SequenceBand {
  * Where the next issuance stands.
  *   - `year`  — the issuance year every stacked band was granted for (0 when
  *     no band is active);
- *   - `next`  — the next sequence to issue (0 when no band is active);
- *   - `bands` — granted-but-not-fully-consumed bands in issuance order.
+ *   - `next`  — the next sequence to issue (0 when no band is active;
+ *     `last.to + 1` when the stack is exactly drained — the zero-stock tail);
+ *   - `bands` — the active band plus any granted queued bands in issuance
+ *     order; an exactly-drained stack keeps its last band as a zero-stock
+ *     tail until the successor grant is stacked.
  * With contiguity enforced, the stack is one gapless range: `bands[0]` holds
  * `next`, and `bands[i+1].from === bands[i].to + 1`.
  */
@@ -183,12 +186,16 @@ export const validateCheckpoint = (raw: unknown): SequenceCheckpoint => {
     }
   }
 
-  const first = validated[0]!;
-  const last = validated[validated.length - 1]!;
-  if (!isSafeInt(next) || next < first.from || next > last.to) {
+  // Issuance always draws from the ACTIVE band (bands[0]); the stack is
+  // gapless, so `next` lives in [active.from, active.to + 1] — the +1 being
+  // the exactly-drained zero-stock tail. A `next` inside a LATER band while
+  // the active band still holds stock is structurally unreachable and
+  // refused (it would skip the active band's remaining sequences).
+  const active = validated[0]!;
+  if (!isSafeInt(next) || next < active.from || next > active.to + 1) {
     throw new DomainError(
       ETIMS_ERRORS.CHECKPOINT_INVALID,
-      `checkpoint next must be an integer within the band stack [${first.from}, ${last.to}], got ${String(next)}`,
+      `checkpoint next must fall within the active band [${active.from}, ${active.to + 1}], got ${String(next)}`,
     );
   }
   return { year, next, bands: validated };
@@ -296,7 +303,11 @@ export type KraSequenceSource = ((count: number) => number[]) & {
 
 export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenceSource => {
   const { config, client, store, audit, clock } = deps;
-  const mintRequestId = createRequestIdMinter(clock);
+  // The request-id minter is constructed lazily on first refill: a broken
+  // clock must refuse on the paths that read it (reserve/refill/stats), not
+  // at wiring construction. Once built, its counter is shared by every later
+  // refill of this source, so concurrent refills never share an id.
+  let mintRequestId: (() => string) | null = null;
 
   const loadCheckpoint = (): SequenceCheckpoint => validateCheckpoint(store.load());
 
@@ -377,7 +388,7 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
     const { now, year } = assertClockYear();
     let checkpoint = loadCheckpoint();
 
-    if (checkpoint.year !== 0 && checkpoint.year !== year && stockOf(checkpoint) > 0) {
+    if (checkpoint.year !== 0 && checkpoint.year !== year) {
       checkpoint = burnStaleYear(checkpoint, now, year);
     }
 
@@ -412,8 +423,14 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
     const to = from + (count - 1);
     const newNext = to + 1;
     const remaining = checkpoint.bands.filter((band) => band.to >= newNext);
+    // An exactly-drained stack keeps its last band as a zero-stock tail
+    // (next = last.to + 1): the tail is what keeps a post-drain refusal a
+    // STOCK_EXHAUSTED (never a spurious YEAR_ROLLOVER) and carries `afterSeq`
+    // for the successor grant. The successor's stacking compacts it away.
     const consumed: SequenceCheckpoint =
-      remaining.length === 0 ? EMPTY_CHECKPOINT : { year: checkpoint.year, next: newNext, bands: remaining };
+      remaining.length > 0
+        ? { year: checkpoint.year, next: newNext, bands: remaining }
+        : { year: checkpoint.year, next: newNext, bands: [checkpoint.bands[checkpoint.bands.length - 1]!] };
     store.save(consumed); // write-ahead: persist BEFORE handing numbers out
     appendOrThrow(
       { kind: 'reserved', at: now.toISOString(), bandId: activeBand.bandId, from, to, count },
@@ -428,19 +445,22 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
 
     // A wiring may call refill() straight through a year boundary — burn the
     // stale stock here too, so no band is ever dropped without evidence.
-    if (checkpoint.year !== 0 && checkpoint.year !== year && stockOf(checkpoint) > 0) {
+    // (A zero-stock stale shell burns empty: the drop itself is the evidence.)
+    if (checkpoint.year !== 0 && checkpoint.year !== year) {
       checkpoint = burnStaleYear(checkpoint, now, year);
     }
 
     const stock = stockOf(checkpoint);
     const yearAligned = checkpoint.year === year && checkpoint.bands.length > 0;
-    if (yearAligned && stock >= config.lowWatermark) {
+    // Config contract: the low watermark is the stock level at or BELOW which
+    // the wiring refills — so `already-stocked` requires strictly more stock.
+    if (yearAligned && stock > config.lowWatermark) {
       return { ok: true, outcome: 'already-stocked' };
     }
 
     const lastBand = checkpoint.bands.length > 0 ? checkpoint.bands[checkpoint.bands.length - 1]! : null;
     const expectedFrom = yearAligned && lastBand !== null ? lastBand.to + 1 : 1;
-    const requestId = mintRequestId();
+    const requestId = (mintRequestId ??= createRequestIdMinter(clock))();
     const result: VsdcBandResult = await client.registerSequenceBand({
       year,
       count: config.bandSize,
@@ -500,9 +520,14 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
     }
 
     const newBand: SequenceBand = { bandId: grant.grantId, from: grant.from, to: grant.to };
+    // Stacking keeps every band that still carries stock and compacts
+    // exactly-drained zero-stock tails away: the successor grant's contiguity
+    // (from === last.to + 1) now anchors the stream, and the tail's issuance
+    // evidence lives in the audit trail's `reserved` events.
+    const stockBearing = checkpoint.bands.filter((band) => band.to >= checkpoint.next);
     const activated: SequenceCheckpoint =
       yearAligned && lastBand !== null
-        ? { year, next: checkpoint.next, bands: [...checkpoint.bands, newBand] }
+        ? { year, next: checkpoint.next, bands: [...stockBearing, newBand] }
         : { year, next: grant.from, bands: [newBand] };
     store.save(activated); // write-ahead: the band exists locally before anyone can draw from it
     appendOrThrow(
@@ -531,7 +556,7 @@ export const createKraSequenceSource = (deps: KraSequenceSourceDeps): KraSequenc
       clockYear: year,
       stockRemaining: stock,
       lowWatermark: config.lowWatermark,
-      needsRefill: !yearAligned || stock < config.lowWatermark,
+      needsRefill: !yearAligned || stock <= config.lowWatermark,
     };
   };
 
