@@ -40,7 +40,11 @@ function makeClients(routes: Record<string, Route>): {
   const calls: Array<{ url: string; method: string; body: string }> = [];
   const fetchImpl: FetchLike = async (input, init) => {
     const url = String(input);
-    calls.push({ url, method: init.method, body: typeof init.body === 'string' ? init.body : '' });
+    calls.push({
+      url,
+      method: init.method ?? 'GET',
+      body: typeof init.body === 'string' ? init.body : '',
+    });
     for (const [fragment, route] of Object.entries(routes)) {
       if (url.includes(fragment)) return jsonResponse(route.status, route.body);
     }

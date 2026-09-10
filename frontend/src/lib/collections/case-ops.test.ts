@@ -49,14 +49,14 @@ function recordingFetch(
     const url = String(input);
     const call: RecordedCall = {
       url,
-      method: init.method,
+      method: init.method ?? 'GET',
       contentType:
         init.headers instanceof Object && 'Content-Type' in init.headers
-          ? (init.headers as Record<string, string>)['Content-Type']
+          ? ((init.headers as Record<string, string>)['Content-Type'] ?? null)
           : null,
       requestId:
         init.headers instanceof Object && 'x-request-id' in init.headers
-          ? (init.headers as Record<string, string>)['x-request-id']
+          ? ((init.headers as Record<string, string>)['x-request-id'] ?? null)
           : null,
       body: typeof init.body === 'string' ? init.body : '',
     };
@@ -121,6 +121,8 @@ describe('openCase (POST /v1/collections/cases, 201)', () => {
 
     expect(calls).toHaveLength(1);
     const call = calls[0];
+    expect(call).toBeDefined();
+    if (call === undefined) return;
     expect(call.url).toBe('http://collections.test/v1/collections/cases');
     expect(call.method).toBe('POST');
     expect(call.contentType).toBe('application/json');
