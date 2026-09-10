@@ -1,0 +1,150 @@
+---
+title: d15 ER ops and platform tables - comms 0011, webhooks 0012, audit outbox 0013, crossborder 0014
+---
+erDiagram
+    orgs {
+        uuid id PK "tenant root"
+        text slug UK "uq_orgs_slug"
+    }
+    customers {
+        uuid id PK "uq_customers_org_id (org_id, id)"
+        text msisdn "uq per org WHERE NOT NULL"
+    }
+    consent_grants {
+        uuid id PK
+        consent_channel channel
+        consent_purpose purpose
+        timestamptz granted_at "NN"
+        timestamptz revoked_at "stamped exactly once - K2 DPA 2019"
+        text lawful_basis "consent contract legitimate_interest"
+    }
+    conversations {
+        uuid id PK
+        uuid org_id FK
+        uuid customer_id FK
+        comm_channel channel
+        text subject
+    }
+    messages {
+        uuid id PK
+        uuid org_id FK
+        uuid conversation_id FK
+        comm_direction direction
+        comm_channel channel
+        message_state state "queued sent delivered failed dead_lettered"
+        uuid consent_grant_id "K2 - outbound MUST cite consent (logical)"
+        text template_key "paired with template_version"
+        integer template_version
+        bigint sequence_no "uq (org, conversation, seq)"
+    }
+    delivery_attempts {
+        uuid id PK
+        uuid org_id FK
+        uuid message_id FK
+        integer attempt_no "uq (org, message, attempt_no)"
+        text outcome "success failure"
+        integer latency_ms
+        timestamptz attempted_at "NN - append-only ladder"
+    }
+    webhook_endpoints {
+        uuid id PK
+        uuid org_id FK
+        text url "https-only, no loopback"
+        text secret_hash "hashed - plaintext never stored"
+        text secret_prefix "identification only"
+        boolean active
+    }
+    webhook_subscriptions {
+        uuid id PK
+        uuid org_id FK
+        uuid endpoint_id FK "ON DELETE CASCADE"
+        text event_type "exact type or * wildcard"
+    }
+    webhook_deliveries {
+        uuid id PK
+        uuid org_id FK
+        uuid endpoint_id FK
+        uuid event_id "uq (org, endpoint, event) idempotent enqueue"
+        text event_type
+        jsonb payload
+        webhook_state state "queued delivering delivered failed dead_lettered"
+        integer attempt_count "bounded retry ladder"
+        timestamptz next_attempt_at "claim input"
+        timestamptz updated_at "claim lease for recovery"
+    }
+    audit_events {
+        uuid id PK
+        uuid org_id "nullable - platform-level events"
+        text actor_type "user system api agent"
+        text action
+        text resource
+        text resource_id
+        jsonb payload
+        boolean redacted
+        bigint seq "uq (org_id, seq) chain sequence"
+        text prev_hash "hash chain - 32+ chars"
+        text hash "over seq org actor action payload prev_hash"
+        timestamptz occurred_at "NN - append-only, no updated_at"
+    }
+    idempotency_keys {
+        uuid id PK
+        uuid org_id FK
+        text scope "uq (org, scope, key) R9 C5"
+        text key
+        text outcome_ref "points at the original outcome"
+    }
+    outbox_events {
+        uuid id PK
+        uuid org_id FK
+        uuid event_id "uq (org, event_id) no double-append"
+        text event_type
+        integer version "envelope v1"
+        text status "pending published poisoned"
+        timestamptz published_at
+        integer attempts
+    }
+    crossborder_corridors {
+        uuid id PK
+        uuid org_id FK
+        text source_currency
+        text target_currency "distinct from source"
+        boolean active
+    }
+    fx_quotes {
+        uuid id PK
+        uuid org_id FK
+        uuid corridor_id FK
+        bigint rate_numerator "exact rational rate"
+        bigint rate_denominator
+        timestamptz expires_at "TTL"
+        timestamptz quoted_at "immutable snapshot R10"
+    }
+    transfer_intents {
+        uuid id PK
+        uuid org_id FK
+        uuid corridor_id FK
+        transfer_intent_state state "drafted quoted authorized submitted settled cancelled"
+        bigint source_amount_minor
+        bigint target_amount_minor "present once quote frozen"
+        bigint fee_flat_minor
+        integer fee_bps "0..10000"
+        uuid quote_id "logical ref - frozen at authorization R10"
+        text source_ref "uq (org, source_ref) idempotent submit"
+    }
+
+    orgs ||--o{ conversations : "org_id"
+    orgs ||--o{ webhook_endpoints : "org_id"
+    orgs ||--o{ audit_events : "org_id (nullable)"
+    orgs ||--o{ idempotency_keys : "org_id"
+    orgs ||--o{ outbox_events : "org_id"
+    orgs ||--o{ crossborder_corridors : "org_id"
+    customers ||--o{ conversations : "customer_id (org, customer)"
+    consent_grants |o--o{ messages : "consent_grant_id (logical, K2)"
+    conversations ||--o{ messages : "conversation_id (org, conversation)"
+    messages ||--o{ delivery_attempts : "message_id (org, message)"
+    webhook_endpoints ||--o{ webhook_subscriptions : "endpoint_id (org, endpoint) CASCADE"
+    webhook_endpoints ||--o{ webhook_deliveries : "endpoint_id (org, endpoint)"
+    outbox_events ||--o{ webhook_deliveries : "event_id (logical - no DDL FK)"
+    crossborder_corridors ||--o{ fx_quotes : "corridor_id (org, corridor)"
+    crossborder_corridors ||--o{ transfer_intents : "corridor_id (org, corridor)"
+    fx_quotes |o--o{ transfer_intents : "quote_id (logical snapshot)"
