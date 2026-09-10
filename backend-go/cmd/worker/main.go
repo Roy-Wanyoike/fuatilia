@@ -1,12 +1,13 @@
-// Command worker is the Fuatilia outbox relay (ADR-0003, issue #74): it
-// drains the transactional outbox (outbox_events, db/migrations/0013) and
-// publishes every domain event to NATS JetStream, at-least-once, in per-org
-// append order. It is the ONLY sanctioned path from Fuatilia's PostgreSQL
-// state to the event fabric — the worker never mutates financial state.
+// Command worker is the Fuatilia background process surface: it drains the
+// transactional outbox (ADR-0003, issue #74) and — env-gated (issue #177) —
+// runs the webhook delivery loop (internal/webhooks, PR #125): claim due
+// webhook_deliveries rows, sign the canonical envelope with the endpoint's
+// resolved secret, POST via the delivery transport, record through the
+// attempt ladder. It never mutates financial state.
 //
 // Usage:
 //
-//	worker                          # run the relay loop until SIGTERM/SIGINT
+//	worker                          # run the relay + (gated) webhook loop until SIGTERM/SIGINT
 //	worker replay poisons           # requeue the whole DLQ (poisoned rows)
 //	worker replay --from T --to T   # republish events appended in [from, to)
 //
@@ -24,11 +25,32 @@
 //	                       the relay runs HERE, so the lag/DLQ series are
 //	                       exposed here, not on the api process
 //
-// Graceful shutdown: SIGTERM/SIGINT lets the in-flight org batch finish and
-// commit (the relay observes cancellation only between org batches), closes
-// broker and pool, and exits 0. Killing between publish and mark is always
-// safe: the batch transaction rolls back and the next process redelivers the
-// unmarked set (at-least-once; consumers are idempotent by event_id).
+// Webhook delivery loop (issue #177), in addition to the relay variables:
+//
+//	WEBHOOKS_ENABLED         default off — a ParseBool truthy value ("1",
+//	                         "true", …) boots the loop alongside the relay
+//	WEBHOOK_SIGNING_SECRETS  required when enabled — entries of
+//	                         <orgUUID>:<endpointUUID>:<secret>, comma or
+//	                         newline separated (webhooks.ParseEnvSigningKeys)
+//
+// The event source is PostgreSQL itself: a webhook claim needs the row's
+// transactional state machine (claim → `delivering` → record under FOR UPDATE
+// SKIP LOCKED, distributed across replicas), so the loop consumes the table
+// directly and deliberately does NOT ride NATS — the outbox relay publishes
+// the same domain events downstream for every other consumer. Enabling the
+// loop without at least one usable signing secret is a boot failure: a worker
+// that could not sign would only dead-letter real deliveries (fail closed).
+// Secrets live in the deployment env until a KMS adapter binds the same
+// SigningKeys port at this wiring site — rotation and the hash-only schema
+// contract are documented in docs/security/secrets.md.
+//
+// Graceful shutdown: SIGTERM/SIGINT lets the in-flight relay org batch finish
+// and commit, stops the webhook loop from claiming, lets any in-flight
+// delivery complete or time out on a context DETACHED from the run context
+// (bounded by its delivery timeout), records its outcome, closes broker and
+// pool, and exits 0. Killing between publish/mark or POST/record is always
+// safe: the at-least-once recovery paths (unmarked batch redelivery, claim
+// lease expiry) redeliver — consumers and receivers are idempotent by id.
 package main
 
 import (
@@ -43,6 +65,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -51,6 +74,7 @@ import (
 
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/observability"
 	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/outbox"
+	"github.com/Roy-Wanyoike/fuatilia/backend-go/internal/webhooks"
 )
 
 // Exit codes: 0 = graceful stop / replay done; 1 = configuration or
@@ -69,6 +93,9 @@ const (
 	envMaxAttempts  = "OUTBOX_MAX_ATTEMPTS"
 	envMetricsAddr  = "FUATILIA_METRICS_ADDR"
 
+	envWebhooksEnabled = "WEBHOOKS_ENABLED"
+	envWebhookSecrets  = "WEBHOOK_SIGNING_SECRETS"
+
 	defaultNATSURL = "nats://127.0.0.1:4222"
 )
 
@@ -78,6 +105,13 @@ type config struct {
 	natsURL     string
 	metricsAddr string
 	relay       outbox.Config
+
+	// webhooks gates the webhook delivery loop; keys is its env-resolved
+	// signing binding (nil unless WEBHOOK_SIGNING_SECRETS parsed). When
+	// webhooks is true, keys is always non-nil — loadConfig refuses an
+	// enabled loop that could not sign.
+	webhooks bool
+	keys     webhooks.SigningKeys
 }
 
 // loadConfig reads the environment through getenv (injectable for tests).
@@ -122,6 +156,23 @@ func loadConfig(getenv func(string) string) (config, error) {
 		if _, _, err := net.SplitHostPort(c.metricsAddr); err != nil {
 			return c, fmt.Errorf("%s must be a host:port address (e.g. :9090), got %q", envMetricsAddr, c.metricsAddr)
 		}
+	}
+	if v := getenv(envWebhooksEnabled); v != "" {
+		on, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, fmt.Errorf("%s must be a boolean (1/t/TRUE/true, 0/f/FALSE/false), got %q", envWebhooksEnabled, v)
+		}
+		c.webhooks = on
+	}
+	if raw := getenv(envWebhookSecrets); raw != "" {
+		keys, err := webhooks.ParseEnvSigningKeys(raw)
+		if err != nil {
+			return c, fmt.Errorf("%s: %w", envWebhookSecrets, err)
+		}
+		c.keys = keys
+	}
+	if c.webhooks && c.keys == nil {
+		return c, fmt.Errorf("%s is enabled but %s carries no signing secrets — the delivery loop cannot sign, refusing to boot (fail closed)", envWebhooksEnabled, envWebhookSecrets)
 	}
 	return c, nil
 }
@@ -191,8 +242,8 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-// run dispatches the CLI: default = relay loop; `replay …` = one-shot DLQ or
-// range replay against the database.
+// run dispatches the CLI: default = relay + (env-gated) webhook loop;
+// `replay …` = one-shot DLQ or range replay against the database.
 func run(args []string) int {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
@@ -203,17 +254,32 @@ func run(args []string) int {
 	return runRelay(logger)
 }
 
-// runRelay is the long-running mode: connect, ensure the stream, relay until
-// SIGTERM/SIGINT, drain, exit 0. DSN and NATS credentials are read from the
-// environment only and never logged.
+// runRelay is the production long-running mode: connect, ensure the stream,
+// relay (and, env-gated, deliver webhooks) until SIGTERM/SIGINT, drain,
+// exit 0. DSN and NATS credentials are read from the environment only and
+// never logged.
 func runRelay(logger *slog.Logger) int {
-	cfg, err := loadConfig(os.Getenv)
+	return runWorker(context.Background(), logger, os.Getenv, nil)
+}
+
+// runWorker is the process composition core the binary executes: load the
+// env config, connect to PostgreSQL, compose the env-gated webhook delivery
+// loop and the outbox relay over one pool, and drain both on SIGTERM/SIGINT
+// (or parent-context cancellation — the seam the integration tests drive).
+//
+// transport nil selects the production webhooks.HTTPTransport; non-nil (the
+// tests) injects a Transport port implementation — the webhooks worker's
+// documented injection point. Real deliveries stay on the production path:
+// the schema's https-only, no-loopback endpoint constraint cannot point a
+// configured endpoint at an in-process receiver.
+func runWorker(parent context.Context, logger *slog.Logger, getenv func(string) string, transport webhooks.Transport) int {
+	cfg, err := loadConfig(getenv)
 	if err != nil {
 		logger.Error("worker.config_invalid", "error", err.Error())
 		return exitFail
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	ctx, stop := signal.NotifyContext(parent, syscall.SIGTERM, os.Interrupt)
 	defer stop()
 
 	pool, err := pgxpool.New(ctx, cfg.databaseURL)
@@ -239,6 +305,36 @@ func runRelay(logger *slog.Logger) int {
 			ReadHeaderTimeout: 5 * time.Second,
 			Handler:           metricsServeMux(metrics.Handler()),
 		}
+	}
+
+	// The webhook loop composes before the broker: it needs only the pool
+	// and the env-resolved signing keys, and a broken webhook wiring is a
+	// boot failure that must not half-start the process. drainWebhooks is
+	// idempotent (sync.Once) so the deferred call covers the early-return
+	// paths while the explicit call below orders the drain BEFORE the
+	// worker.stopped record — the in-flight delivery records its outcome
+	// while the pool is still open (this drain runs before pool.Close).
+	var drainWebhooks func()
+	if cfg.webhooks {
+		if transport == nil {
+			transport = webhooks.NewHTTPTransport(nil)
+		}
+		loop, err := webhooks.New(pool, cfg.keys, transport, webhooks.Config{Logger: logger})
+		if err != nil {
+			logger.Error("worker.webhooks_invalid", "error", err.Error())
+			return exitFail
+		}
+		webhookDone := make(chan error, 1)
+		go func() { webhookDone <- loop.Run(ctx) }()
+		var once sync.Once
+		drainWebhooks = func() {
+			once.Do(func() {
+				if err := <-webhookDone; err != nil {
+					logger.Error("worker.webhooks_failed", "error", err.Error())
+				}
+			})
+		}
+		defer drainWebhooks()
 	}
 
 	nc, err := nats.Connect(cfg.natsURL,
@@ -276,6 +372,7 @@ func runRelay(logger *slog.Logger) int {
 		"batch", cfg.relay.BatchSize,
 		"poll_interval_ms", cfg.relay.PollInterval.Milliseconds(),
 		"max_attempts", cfg.relay.MaxAttempts,
+		"webhooks", cfg.webhooks,
 	)
 	if metricsServer != nil {
 		go func() {
@@ -294,8 +391,13 @@ func runRelay(logger *slog.Logger) int {
 		defer cancel()
 		_ = metricsServer.Shutdown(shutdownCtx)
 	}
-	// Graceful drain complete: the in-flight batch committed, connections
-	// close via the defers above.
+	// Graceful drain: relay stopped between org batches; the webhook loop
+	// stopped claiming at the same cancellation and its in-flight
+	// delivery (if any) completes or times out here — outcome recorded
+	// while the pool is still open. Connections close via the defers.
+	if drainWebhooks != nil {
+		drainWebhooks()
+	}
 	logger.Info("worker.stopped")
 	return exitOK
 }
@@ -378,7 +480,8 @@ func runReplay(args []string, logger *slog.Logger) int {
 			"from", req.from.Format(time.RFC3339),
 			"to", req.to.Format(time.RFC3339))
 		fmt.Printf("requeued %d event(s) in [%s, %s)\n",
-			n, req.from.Format(time.RFC3339), req.to.Format(time.RFC3339))
+			n, req.from.Format(time.RFC3339),
+			req.to.Format(time.RFC3339))
 	}
 	return exitOK
 }

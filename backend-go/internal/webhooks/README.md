@@ -42,14 +42,40 @@ Terminal rows (`delivered` / `dead_lettered`) are frozen by the schema trigger
 (0012); the `state = 'delivering'` predicate on every record statement keeps
 this worker from ever touching them.
 
-## Secrets (KMS-ready)
+## Secrets (env-backed today, KMS-ready)
 
 0012 stores endpoint secrets HASHED (`secret_hash` / `secret_prefix` are
-identification references, never plaintext). The worker therefore resolves
-signing keys through the injected `SigningKeys` port
-(`SecretFor(ctx, orgID, endpointID)`); production binds a KMS adapter there.
+identification references, never plaintext). The worker resolves signing keys
+through the injected `SigningKeys` port (`SecretFor(ctx, orgID, endpointID)`):
+
+- **Production default (issue #177): `EnvSigningKeys`** (`keys.go`) parses the
+  deployment's `WEBHOOK_SIGNING_SECRETS` — entries of
+  `<orgUUID>:<endpointUUID>:<secret>` separated by commas or newlines,
+  validated at boot (malformed → `WEBHOOK_CONFIG_INVALID`, the worker refuses
+  to start; errors never echo secret material). Rotation: update the env and
+  rolling-restart between delivery windows — receivers honoring the ±5 min
+  skew window tolerate the cutover (docs/security/secrets.md §4).
+- **KMS drop-in:** an adapter implementing the same one-method port swaps in
+  at the `cmd/worker` wiring site; nothing in this package changes.
+
 Nothing in this package can read a plaintext secret from the database, and
 secret material never appears in logs or errors.
+
+## Process surface (issue #177)
+
+`cmd/worker` — the compose `worker` service target — boots the loop alongside
+the outbox relay when `WEBHOOKS_ENABLED=1`, and refuses to boot enabled
+without usable `WEBHOOK_SIGNING_SECRETS` (fail closed). The event source is
+PostgreSQL itself: the claim needs the row's transactional state machine
+(claim → `delivering` → record, `SKIP LOCKED` across replicas), so the loop
+consumes the table directly and deliberately does NOT ride NATS — the outbox
+relay publishes the same domain events downstream for other consumers.
+SIGTERM stops claiming, the in-flight delivery completes (context detached
+from the run context, bounded by `DeliveryTimeout`), its outcome is recorded,
+and the process exits 0. Integration evidence: `cmd/worker/main_test.go`
+(claims a queued delivery on real PostgreSQL, signs with the env-resolved
+key, delivers via the injected Transport port, drains on cancellation; the
+compiled binary boots against a real cluster and exits 0 on SIGTERM).
 
 ## Config (Config / ResolveConfig)
 
