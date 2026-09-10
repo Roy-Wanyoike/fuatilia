@@ -147,10 +147,19 @@ describe('PGAuthStore — boot contract', () => {
     const store = new PGAuthStore(new PGClient({ config: config as never }));
     const user = makeUser(store);
     expect(() => store.saveUser(user)).toThrow(/not ready|ensureReady/i);
-    const report = await store.ensureReady();
-    expect(report.quarantined).toBe(0);
+    await store.ensureReady();
+    // NOTE (shared-database honesty): `report.quarantined` counts rows left by
+    // PRIOR runs of every lane that shares this test database, so a global
+    // `=== 0` cannot be asserted here. The boot contract this spec owns is
+    // about THIS store's rows: the user written below must APPLY (never
+    // quarantine) and must survive a re-boot — proven right here and again by
+    // the durability round-trips below.
     expect(() => store.saveUser(user)).not.toThrow(); // boot unlocks
     await store.flush();
+    const reboots = new PGAuthStore(new PGClient({ config: config as never }));
+    await reboots.ensureReady();
+    expect(reboots.users().some((u) => u.userId === user.userId)).toBe(true);
+    await reboots.close();
     orgs.push(user.orgId);
   });
 });
