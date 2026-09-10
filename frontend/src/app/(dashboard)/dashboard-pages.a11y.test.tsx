@@ -154,17 +154,37 @@ describe('Payments page a11y', () => {
 describe('Static dashboard pages a11y', () => {
   const cases = [
     { render: <ReconciliationPage />, name: 'Reconciliation', id: 'reconciliation-heading' },
-    { render: <CustomersPage />, name: 'Customers', id: 'customers-heading' },
+    {
+      // Customer 360 (#134) mounts the derived directory through react-query —
+      // the page needs the provider and a stubbed transport like every other
+      // read-model surface. Empty read models render its honest empty state.
+      render: <CustomersPage />,
+      name: 'Customers',
+      id: 'customers-heading',
+      routes: {
+        '/v1/receivables': { status: 200, body: receivableListEmptyExample },
+        '/v1/payments': { status: 200, body: paymentListEmptyExample },
+      },
+    },
     { render: <SettingsPage />, name: 'Settings', id: 'settings-heading' },
   ] as const;
 
   for (const testCase of cases) {
-    it(`labels the ${testCase.name} section with its h1 and keeps controls named`, () => {
-      render(testCase.render);
+    it(`labels the ${testCase.name} section with its h1 and keeps controls named`, async () => {
+      if ('routes' in testCase) {
+        vi.stubGlobal('fetch', routeFetch(testCase.routes));
+      }
+      render(<QueryProviders>{testCase.render}</QueryProviders>);
 
-      const heading = screen.getByRole('heading', { level: 1, name: testCase.name });
+      const heading = await screen.findByRole('heading', { level: 1, name: testCase.name });
       expect(heading).toHaveAttribute('id', testCase.id);
       expect(heading.closest('section')).toHaveAttribute('aria-labelledby', testCase.id);
+
+      // Read-model surfaces resolve through react-query — wait for every busy
+      // region to settle before asserting the settled (empty) state.
+      await waitFor(() => {
+        expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+      });
 
       // These surfaces are honest empties: no interactive controls to trip on.
       expect(screen.queryAllByRole('button')).toHaveLength(0);

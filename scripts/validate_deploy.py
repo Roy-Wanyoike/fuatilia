@@ -103,8 +103,9 @@ REQUIRED_ENV_KEYS = {
     "DARAJA_CONSUMER_SECRET",
 }
 # Never required as .env keys: managed by Next.js/the Dockerfiles, not by
-# operators.
-ENV_SCAN_EXCLUDED = {"NODE_ENV", "NEXT_OUTPUT", "PORT", "HOSTNAME"}
+# operators. PATH is the system search path — pgtest.go (issue #131) reads it
+# to DISCOVER PostgreSQL binaries, it is never an operator-supplied app key.
+ENV_SCAN_EXCLUDED = {"NODE_ENV", "NEXT_OUTPUT", "PORT", "HOSTNAME", "PATH"}
 SCRIPT_SUFFIXES = (".cjs", ".js", ".mjs", ".sql", ".sh")
 
 failures: list[str] = []
