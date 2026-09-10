@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -41,11 +42,17 @@ import (
 // the cluster, and a silently skipped integration suite would fake the gate
 // green.
 const (
-	EnvPGBin  = "FUATILIA_TEST_PGBIN"
+	// EnvPGBin is the Go lanes' original binary-directory override; it wins
+	// over everything so existing scripts keep working.
+	EnvPGBin = "FUATILIA_TEST_PGBIN"
+	// EnvPGBinDir is the same binary-directory override the TypeScript
+	// persistence testutil (src/adapters/persistence/pg/testutil.ts) and CI
+	// set — one name serves both stacks (issue #131).
+	EnvPGBinDir = "FUATILIA_PG_BIN_DIR"
+
 	EnvPGPort = "FUATILIA_TEST_PGPORT"
 	EnvPGData = "FUATILIA_TEST_PGDATA"
 
-	defaultPGBin  = "/home/z/my-project/tools/postgresql-16.4.0-x86_64-unknown-linux-gnu/bin"
 	defaultPGPort = "5435"
 	defaultPGData = "/home/z/my-project/tools/pgdata-10-a"
 
@@ -120,13 +127,14 @@ func (c *Cluster) TruncateAll(ctx context.Context, database string) error {
 // (default 5435), then ensures the dedicated database exists with migrations
 // 0001–0014 applied.
 func startShared(ctx context.Context) (*Cluster, error) {
-	binDir := PGBin()
-	port := getenv(EnvPGPort, defaultPGPort)
-	for _, bin := range []string{"pg_ctl", "postgres"} {
-		if _, err := os.Stat(filepath.Join(binDir, bin)); err != nil {
-			return nil, fmt.Errorf("pgtest: postgres binary %s missing under %s: %w", bin, binDir, err)
-		}
+	binDir, err := PGBin()
+	if err != nil {
+		return nil, err
 	}
+	if err := verifyBinDir(binDir, "pg_ctl", "postgres"); err != nil {
+		return nil, err
+	}
+	port := getenv(EnvPGPort, defaultPGPort)
 	cluster := &Cluster{
 		BinDir:         binDir,
 		DataDir:        getenv(EnvPGData, filepath.Join(os.TempDir(), "fuatilia-testdata-unmanaged")),
@@ -150,11 +158,12 @@ func startShared(ctx context.Context) (*Cluster, error) {
 // shuts it down and removes the data dir. Used by tests that must restart
 // PostgreSQL (call stop, Start again, prove the pool reconnects).
 func StartTemp(ctx context.Context) (cluster *Cluster, stop func(), err error) {
-	binDir := PGBin()
-	for _, bin := range []string{"initdb", "pg_ctl", "postgres"} {
-		if _, statErr := os.Stat(filepath.Join(binDir, bin)); statErr != nil {
-			return nil, nil, fmt.Errorf("pgtest: postgres binary %s missing under %s — the portable distro is part of the merge gate: %w", bin, binDir, statErr)
-		}
+	binDir, binErr := PGBin()
+	if binErr != nil {
+		return nil, nil, binErr
+	}
+	if err := verifyBinDir(binDir, "initdb", "pg_ctl", "postgres"); err != nil {
+		return nil, nil, err
 	}
 	dataDir, err := os.MkdirTemp("", "fuatilia-pgtest-*")
 	if err != nil {
@@ -382,8 +391,83 @@ func run(ctx context.Context, binDir, name string, args ...string) (string, erro
 	return strings.TrimSpace(string(out)), err
 }
 
-// PGBin resolves the postgres binary directory (FUATILIA_TEST_PGBIN).
-func PGBin() string { return getenv(EnvPGBin, defaultPGBin) }
+// PGBin resolves the PostgreSQL binary directory the test clusters boot
+// from. Discovery order — first hit wins (issue #131):
+//
+//  1. FUATILIA_TEST_PGBIN — the Go lanes' original override;
+//  2. FUATILIA_PG_BIN_DIR — the name the TS persistence testutil
+//     (src/adapters/persistence/pg/testutil.ts) and CI already set;
+//  3. PATH — the directory holding both initdb and pg_ctl.
+//
+// No hardcoded install path survives (issue #131): the previous default
+// named a directory that exists in exactly one sandbox, so every fresh
+// clone failed `go test` deep inside pg_ctl. When nothing resolves, the
+// error names every tried path plus the env vars that fix the run.
+func PGBin() (string, error) {
+	for _, env := range []string{EnvPGBin, EnvPGBinDir} {
+		if dir := getenv(env, ""); dir != "" {
+			return dir, nil
+		}
+	}
+	initdb, initdbErr := exec.LookPath("initdb")
+	pgctl, pgctlErr := exec.LookPath("pg_ctl")
+	if initdbErr == nil && pgctlErr == nil {
+		if dir := filepath.Dir(initdb); dir == filepath.Dir(pgctl) {
+			return dir, nil
+		}
+		return "", fmt.Errorf("pgtest: PATH lookup found initdb in %s but pg_ctl in %s — one PostgreSQL installation holds both; set %s (or %s) to that directory",
+			filepath.Dir(initdb), filepath.Dir(pgctl), EnvPGBin, EnvPGBinDir)
+	}
+	return "", fmt.Errorf(`pgtest: no PostgreSQL binary directory found. Tried, in order:
+  %s: (unset)
+  %s: (unset)
+  PATH lookup of initdb: %s
+  PATH lookup of pg_ctl: %s
+set %s (or %s) to the directory holding initdb, pg_ctl and postgres — e.g. %s=/usr/lib/postgresql/16/bin — or add that directory to PATH (searched: %s)`,
+		EnvPGBin, EnvPGBinDir,
+		lookOutcome(initdb, initdbErr), lookOutcome(pgctl, pgctlErr),
+		EnvPGBin, EnvPGBinDir, EnvPGBin, quotedPathList())
+}
+
+// lookOutcome renders one LookPath result for the discovery-failure error:
+// the resolved path on a hit, the underlying error on a miss.
+func lookOutcome(path string, err error) string {
+	if err != nil {
+		return fmt.Sprintf("not found (%v)", err)
+	}
+	return "found " + path
+}
+
+// quotedPathList renders $PATH as the explicit directory list a LookPath
+// search tried, so the discovery-failure error names every tried path.
+func quotedPathList() string {
+	dirs := filepath.SplitList(os.Getenv("PATH"))
+	if len(dirs) == 0 {
+		return "(empty)"
+	}
+	quoted := make([]string, len(dirs))
+	for i, dir := range dirs {
+		quoted[i] = strconv.Quote(dir)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+// verifyBinDir proves a resolved binary directory holds the binaries the
+// caller needs; anything missing is an actionable error naming the env vars
+// that would point at a real PostgreSQL 16 installation.
+func verifyBinDir(binDir string, bins ...string) error {
+	var missing []string
+	for _, bin := range bins {
+		if _, err := os.Stat(filepath.Join(binDir, bin)); err != nil {
+			missing = append(missing, bin)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("pgtest: %s missing under %s — the PostgreSQL 16 binaries are part of the merge gate: set %s (or %s) to the directory holding initdb, pg_ctl and postgres, or add it to PATH",
+		strings.Join(missing, ", "), binDir, EnvPGBin, EnvPGBinDir)
+}
 
 func getenv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {

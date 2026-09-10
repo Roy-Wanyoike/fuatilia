@@ -9,18 +9,28 @@
 # Usage:  backend-go/internal/infra/testdata/boot-api-lane.sh
 set -euo pipefail
 
-PGBIN="${FUATILIA_TEST_PGBIN:-/home/z/my-project/tools/postgresql-16.4.0-x86_64-unknown-linux-gnu/bin}"
+# Binary discovery mirrors pgtest.PGBin (issue #131): FUATILIA_TEST_PGBIN,
+# then FUATILIA_PG_BIN_DIR (the name the TS testutil + CI set), then PATH.
+PGBIN="${FUATILIA_TEST_PGBIN:-${FUATILIA_PG_BIN_DIR:-}}"
+if [[ -z "$PGBIN" ]]; then
+  INITDB_PATH="$(command -v initdb 2>/dev/null || true)"
+  if [[ -n "$INITDB_PATH" ]]; then
+    PGBIN="$(dirname "$INITDB_PATH")"
+  fi
+fi
+
+if [[ -z "$PGBIN" || ! -x "$PGBIN/pg_ctl" ]]; then
+  echo "pgtest: postgres binaries not found (tried FUATILIA_TEST_PGBIN, FUATILIA_PG_BIN_DIR, PATH lookup of initdb/pg_ctl)" >&2
+  echo "pgtest: set FUATILIA_TEST_PGBIN or FUATILIA_PG_BIN_DIR to the directory holding initdb, pg_ctl and postgres — e.g. FUATILIA_TEST_PGBIN=/usr/lib/postgresql/16/bin — or add that directory to PATH" >&2
+  exit 1
+fi
+
 PORT="${FUATILIA_TEST_PGPORT:-5435}"
 DATADIR="${FUATILIA_TEST_PGDATA:-/home/z/my-project/tools/pgdata-10-a}"
 DBNAME="fuatilia_api_test"
 HOST="127.0.0.1"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-
-if [[ ! -x "$PGBIN/pg_ctl" ]]; then
-  echo "pgtest: postgres binaries not found under $PGBIN" >&2
-  exit 1
-fi
 
 if [[ ! -d "$DATADIR" ]]; then
   echo "pgtest: initdb -> $DATADIR"
