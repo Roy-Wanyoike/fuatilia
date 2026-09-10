@@ -1,12 +1,30 @@
-# Fuatilia — minimal production topology (issue #75, roadmap P0 criterion 7).
+# Fuatilia — full local stack (issue #138; extends the #75/#77 foundation).
 #
-#   PG (truth, ADR-0002) + NATS JetStream (event fabric, ADR-0003)
-#   + api + worker + a one-shot migrate job. Dev/staging-grade on purpose —
-#   "complexity is earned" (VISION §5); no Kubernetes.
+# Boot flow (one command: `make up`):
+#
+#   postgres (healthy) ──► migrate (one-shot schema job, db/migrate.cjs)
+#        │                        │ service_completed_successfully
+#        │                        ▼
+#   nats ──── service_healthy ─► api  ◄──the only financial truth (ADR-0002)
+#        │                        │ service_healthy
+#        │                        ▼
+#        └── service_healthy ──► worker                    frontend :3000
+#
+#   postgres:16  — truth store (ADR-0002); NOT published to the host.
+#   nats:2       — JetStream event fabric (ADR-0003); monitor port 8222 is
+#                  container-internal only (healthchecks), not published.
+#   migrate      — one-shot forward-only schema job (node:22-alpine);
+#                  restart: "no" — a failed migration never lets a binary
+#                  boot against the wrong schema.
+#   api          — Go /v1 service (issue #72); the ONLY host-published
+#                  control-plane port (8080) plus the web console (3000).
+#   worker       — outbox relay → JetStream (issue #74); no listener.
+#   frontend     — Next.js standalone web console (issue #138 lane); BFF
+#                  relays browser calls to api server-side.
 #
 # All configuration is interpolated from the environment (docker compose
 # auto-loads ./.env): cp .env.example .env, set the marked values, then
-#   docker compose up --build
+#   docker compose up --build          (or: make up)
 # scripts/validate_deploy.py statically enforces this file's structure and
 # the .env.example contract — see docs/DEPLOY.md for what that does and does
 # not prove (no Docker daemon exists in the build environment).
@@ -42,19 +60,29 @@ services:
   # --- NATS JetStream: the event fabric (ADR-0003) -------------------------
   nats:
     image: nats:2.11.17-alpine
-    # -js  = enable JetStream; -sd = stream state under the named volume.
-    # Losing this volume costs at-least-once redelivery buffering only —
+    # -js  = enable JetStream; -sd = stream state under the named volume;
+    # -m   = monitoring endpoint (container-internal: /healthz backs the
+    #        healthchecks of this service AND the worker's probe; the port is
+    #        deliberately NOT published).
+    # Losing the stream volume costs at-least-once redelivery buffering only —
     # truth stays in PostgreSQL and replays deterministically (ADR-0003).
-    command: ["-js", "-sd", "/data"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
     volumes:
       - fuatilia_nats:/data
+    healthcheck:
+      # /healthz answers 200 OK once the server (and JetStream) is ready.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     restart: unless-stopped
 
   # --- migrate: one-shot, forward-only, idempotent schema job --------------
   # Runs db/migrate.cjs (stdlib-only wire client; applied files are recorded
-  # in schema_migrations and skipped on re-run). api and worker wait for it
-  # to complete successfully — a failed migration never lets a binary boot
-  # against the wrong schema.
+  # in schema_migrations and skipped on re-run). api, worker and therefore
+  # frontend wait for it to complete successfully — "migrations on boot":
+  # `docker compose up` always ends with a schema that matches db/migrations.
   migrate:
     image: node:22-alpine
     working_dir: /app
@@ -85,17 +113,21 @@ services:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required - copy .env.example to .env and set it}
       # pgxpool tuning for the persistence adapters (issues #72/#73 contract).
       FUATILIA_PG_MAX_CONNS: ${FUATILIA_PG_MAX_CONNS:-10}
-      FUATILIA_PG_MAX_CONN_LIFETIME: ${FUATILIA_PG_MAX_CONN_LIFETIME:-30m}
-      FUATILIA_PG_MAX_CONN_IDLE_TIME: ${FUATILIA_PG_MAX_CONN_IDLE_TIME:-5m}
+      FUATILIA_PG_LIFETIME: ${FUATILIA_PG_LIFETIME:-30m}
+      FUATILIA_PG_IDLE_TIME: ${FUATILIA_PG_IDLE_TIME:-5m}
     ports:
-      # The ONLY published port in the stack. Keep in agreement with the api
-      # target's HEALTHCHECK (8080 inside the container).
+      # A host-published control-plane port. Keep in agreement with the api
+      # target's HEALTHCHECK (8080 inside the container) — `make smoke` and
+      # the frontend BFF both ride on it.
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Healthcheck lives in backend-go/Dockerfile (busybox wget against the
+    # container's own /v1/health) so it travels with the image; frontend's
+    # service_healthy condition below consumes it.
     restart: unless-stopped
 
   # --- worker: outbox relay → NATS JetStream (issue #74, ADR-0003) ---------
@@ -116,9 +148,34 @@ services:
       OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS:-5}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  # --- frontend: the Next.js web console (issue #138) ----------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: fuatilia-frontend:local
+    environment:
+      # Server-side only: the BFF route handlers (/api/v1/*) relay browser
+      # calls to the api service over the private compose network, attaching
+      # the session bearer from the httpOnly cookie. Never browser-visible.
+      # NEXT_PUBLIC_API_BASE is deliberately NOT set here: it is a BUILD-TIME
+      # variable (inlined into the browser bundle), and the compose stack
+      # uses the same-origin BFF path — see .env.example + the Dockerfile.
+      API_BASE_URL: http://api:8080
+    ports:
+      # The web console. GET / renders the dashboard auth gate (200) — the
+      # frontend image's HEALTHCHECK target; `make smoke` drives it.
+      - "3000:3000"
+    depends_on:
+      # service_healthy = the api image's /v1/health probe is green, which
+      # transitively proves postgres healthy + migrations applied.
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

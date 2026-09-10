@@ -1,0 +1,17 @@
+# frontend build context — what must NEVER enter an image build (issue #138).
+# .env / .env.* are excluded wholesale: no secrets ever reach a build layer
+# or image (.env.example included — the build needs no configuration).
+node_modules
+.next
+coverage
+*.log
+.env
+.env.*
+.git
+Dockerfile
+.dockerignore
+README.md
+vitest.setup.ts
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
