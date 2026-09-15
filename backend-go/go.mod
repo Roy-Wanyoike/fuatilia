@@ -8,7 +8,7 @@ go 1.26.0
 toolchain go1.26.8
 
 require (
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/nats-io/nats-server/v2 v2.14.6
 	github.com/nats-io/nats.go v1.53.1
 	github.com/prometheus/client_golang v1.23.2
